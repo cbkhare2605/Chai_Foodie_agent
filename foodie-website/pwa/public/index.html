@@ -355,7 +355,8 @@
       addPhotos: [],
       addVerifiedVisit: false,
       addWouldGoAgain: true,
-      savedListFilter: 'Saved'
+      savedListFilter: 'Saved',
+      mapFocusRestaurant: null
     };
 
     let searchTimer = null;
@@ -545,6 +546,10 @@
       state.viewRestaurant = { name: restaurant, lat, lng };
       state.panel = 'restaurant';
       render();
+    }
+    function showRestaurantOnMap(name, lat, lng) {
+      state.mapFocusRestaurant = { name, lat, lng };
+      setTab('map');
     }
 
     function sendConnectionRequest(toName) {
@@ -1109,6 +1114,7 @@
             <button class="review-action-btn ${r.liked?'liked':''}" onclick="toggleLike('${r.id}')" aria-label="Like">${r.liked?'❤️':'🤍'} Like</button>
             <button class="review-action-btn" onclick="document.getElementById('commentInput${r.id}')?.focus()" aria-label="Comment">💬 Comment ${comments.length?`(${comments.length})`:''}</button>
             <button class="review-action-btn" onclick="shareReview('${r.id}')" aria-label="Share">↗️ Share</button>
+            <button class="review-action-btn" onclick="showRestaurantOnMap('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" aria-label="View on map">📍 Map</button>
             <button class="review-action-btn" onclick="toggleSaveById('${r.id}')" aria-label="Save">${saved?'🔖':'📑'} ${saved?'Saved':'Save'}</button>
             ${isOwn ? `<button class="review-action-btn" onclick="editReviewById('${r.id}')">✏️ Edit</button><button class="review-action-btn" onclick="deleteReviewById('${r.id}')" style="color:#c62828" aria-label="Delete">🗑️ Delete</button>` : ''}
           </div>
@@ -1364,7 +1370,10 @@
               ${networkScore ? `<span style="font-weight:500;color:#333">Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</span>` : ''}
               ${cuisines.length ? `<span>${cuisines.join(', ')}</span>` : ''}
             </div>
-            <a href="https://www.google.com/maps?q=${vr.lat},${vr.lng}" target="_blank" rel="noopener" style="display:inline-block;margin-top:12px;color:#0a66c2;font-size:0.9rem">📍 Get directions</a>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+              <a href="https://www.google.com/maps?q=${vr.lat},${vr.lng}" target="_blank" rel="noopener" style="color:#0a66c2;font-size:0.9rem">📍 Get directions</a>
+              <button onclick="showRestaurantOnMap('${(vr.name||'').replace(/'/g,"\\'")}', ${vr.lat}, ${vr.lng})" style="padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">📍 View on map</button>
+            </div>
           </div>
           <h3 style="margin-bottom:12px">Reviews</h3>
           ${restReviews.length ? restReviews.map(r=>renderReviewCard(r)).join('') : '<p style="color:#666">No reviews yet.</p>'}
@@ -1641,6 +1650,18 @@
         userLocationMarker = L.marker([state.userLocation.lat, state.userLocation.lng], { icon }).addTo(map);
         userLocationMarker.bindPopup('You are here');
       } else userLocationMarker = null;
+      if (state.mapFocusRestaurant) {
+        const f = state.mapFocusRestaurant;
+        map.setView([f.lat, f.lng], 15);
+        const tol = 0.0001;
+        const m = markers.find(mk => Math.abs(mk.getLatLng().lat - f.lat) < tol && Math.abs(mk.getLatLng().lng - f.lng) < tol);
+        if (m) setTimeout(function(){ m.openPopup(); }, 300);
+        else {
+          const dirUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + f.lat + ',' + f.lng;
+          L.popup().setLatLng([f.lat, f.lng]).setContent('<div class="map-popup" style="min-width:180px"><strong>' + escapeHtml(f.name||'') + '</strong><br><a href="' + dirUrl + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#0a66c2;color:white;border-radius:6px;text-decoration:none;font-size:0.9rem">Get directions</a> <button onclick="window.viewRestaurantDetail(\'' + (f.name||'').replace(/'/g,"\\'") + '\', ' + f.lat + ', ' + f.lng + ')" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">View details</button></div>').openOn(map);
+        }
+        state.mapFocusRestaurant = null;
+      }
     }
 
     function zoomMapToSearch() {
@@ -1666,6 +1687,7 @@
     }
 
     window.viewRestaurantDetail = viewRestaurantDetail;
+    window.showRestaurantOnMap = showRestaurantOnMap;
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
     render();
     handleDeepLink();
