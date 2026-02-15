@@ -1644,11 +1644,20 @@
       if (password.length < 6) { if (errEl) errEl.textContent = 'Password must be at least 6 characters'; return; }
       if (errEl) errEl.textContent = '';
       try {
-        await api.signUp(email, password, name);
-        const stored = await api.loadData();
-        state.user = stored.user; state.reviews = stored.reviews; state.comments = stored.comments; state.connections = stored.connections; state.connectionRequests = stored.connectionRequests; state.saved = stored.saved; state.notifications = stored.notifications; state.profiles = stored.profiles; state.privateNotes = stored.privateNotes; state.groupLists = stored.groupLists; state.trustScores = stored.trustScores;
-        render();
-      } catch (e) { if (errEl) errEl.textContent = e.message || 'Sign up failed'; }
+        const signUpData = await api.signUp(email, password, name);
+        const stored = await api.loadData(signUpData?.session || signUpData?.user);
+        if (!stored.user && signUpData?.user) {
+          const prof = await api.getProfileByUserId(signUpData.user.id);
+          stored.user = { id: signUpData.user.id, displayName: prof?.display_name || signUpData.user.email?.split('@')[0] || 'User' };
+        }
+        if (stored.user) {
+          state.user = stored.user; state.reviews = stored.reviews || []; state.comments = stored.comments || {}; state.connections = stored.connections || {}; state.connectionRequests = stored.connectionRequests || []; state.saved = stored.saved || []; state.notifications = stored.notifications || []; state.profiles = stored.profiles || {}; state.privateNotes = stored.privateNotes || {}; state.groupLists = stored.groupLists || {}; state.trustScores = stored.trustScores || {};
+          state.tab = 'feed'; state.panel = 'main';
+          render();
+        } else {
+          errEl.textContent = 'Check your email to confirm your account, then log in.';
+        }
+      } catch (e) { if (errEl) errEl.textContent = e.message || e.toString?.() || 'Sign up failed'; }
     }
     async function handleSupabaseSignIn() {
       const api = window.FOODIE_API;
@@ -1659,11 +1668,21 @@
       if (!email || !password) { if (errEl) errEl.textContent = 'Please enter email and password'; return; }
       if (errEl) errEl.textContent = '';
       try {
-        await api.signIn(email, password);
-        const stored = await api.loadData();
-        state.user = stored.user; state.reviews = stored.reviews; state.comments = stored.comments; state.connections = stored.connections; state.connectionRequests = stored.connectionRequests; state.saved = stored.saved; state.notifications = stored.notifications; state.profiles = stored.profiles; state.privateNotes = stored.privateNotes; state.groupLists = stored.groupLists; state.trustScores = stored.trustScores;
-        render();
-      } catch (e) { if (errEl) errEl.textContent = e.message || 'Log in failed'; }
+        const signInData = await api.signIn(email, password);
+        const stored = await api.loadData(signInData?.session || signInData?.user);
+        if (!stored.user && signInData?.user) {
+          const prof = await api.getProfileByUserId(signInData.user.id);
+          stored.user = { id: signInData.user.id, displayName: prof?.display_name || signInData.user.email?.split('@')[0] || 'User' };
+          stored.reviews = stored.reviews || []; stored.comments = stored.comments || {}; stored.connections = stored.connections || {}; stored.connectionRequests = stored.connectionRequests || []; stored.saved = stored.saved || []; stored.notifications = stored.notifications || []; stored.profiles = stored.profiles || {}; stored.privateNotes = stored.privateNotes || {}; stored.groupLists = stored.groupLists || {}; stored.trustScores = stored.trustScores || {};
+        }
+        if (stored.user) {
+          state.user = stored.user; state.reviews = stored.reviews || []; state.comments = stored.comments || {}; state.connections = stored.connections || {}; state.connectionRequests = stored.connectionRequests || []; state.saved = stored.saved || []; state.notifications = stored.notifications || []; state.profiles = stored.profiles || {}; state.privateNotes = stored.privateNotes || {}; state.groupLists = stored.groupLists || {}; state.trustScores = stored.trustScores || {};
+          state.tab = 'feed'; state.panel = 'main';
+          render();
+        } else {
+          errEl.textContent = 'Log in failed. If you just signed up, check your email to confirm.';
+        }
+      } catch (e) { if (errEl) errEl.textContent = e.message || e.toString?.() || 'Log in failed'; }
     }
     async function logout() {
       if (window.FOODIE_API?.enabled) {

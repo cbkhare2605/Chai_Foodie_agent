@@ -25,8 +25,12 @@
     return data;
   }
 
-  async function loadData() {
-    const { data: { user } } = await supabase.auth.getUser();
+  async function loadData(sessionOrUser) {
+    let user = sessionOrUser?.user || sessionOrUser;
+    if (!user) {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      user = u;
+    }
     if (!user) {
       return { user: null, reviews: [], comments: {}, connections: {}, connectionRequests: [], saved: [], notifications: [], profiles: {}, privateNotes: {}, groupLists: {}, trustScores: {} };
     }
