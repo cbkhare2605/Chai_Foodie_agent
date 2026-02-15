@@ -365,9 +365,17 @@
       addWouldGoAgain: true,
       savedListFilter: 'Saved',
       mapFocusRestaurant: null,
-      pendingConnect: null
+      pendingConnect: null,
+      authMode: 'signup'
     };
     async function bootstrapApp() {
+      const hashParams = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+      if (hashParams.get('type') === 'recovery') {
+        state.authMode = 'reset';
+        state.user = null;
+        render();
+        return;
+      }
       var stored;
       if (window.FOODIE_API && window.FOODIE_API.enabled && window.FOODIE_API.loadData) {
         try {
@@ -1355,6 +1363,43 @@
       if (!state.user) {
         const useSupabase = window.FOODIE_API && window.FOODIE_API.enabled;
         if (useSupabase) {
+          if (state.authMode === 'forgot') {
+            app.innerHTML = `
+          <div class="signup-page">
+            <div class="signup-top">
+              <img src="logo/Foodie_white.svg" alt="Foodie" class="signup-logo-img">
+            </div>
+            <div class="signup-bottom">
+              <div class="signup-actions">
+                <p class="signup-demo-label">Reset password</p>
+                <p style="font-size:0.9rem;color:rgba(255,255,255,0.8);margin-bottom:16px">Enter your email and we'll send you a link to reset your password.</p>
+                <input type="email" id="authForgotEmail" placeholder="Email" style="width:100%;max-width:320px;padding:14px;border:2px solid rgba(255,255,255,0.6);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:1rem" />
+                <div id="authError" style="color:#ff6b6b;font-size:0.9rem;min-height:20px"></div>
+                <button class="signup-btn" onclick="handleForgotPassword()" style="font-size:1.1rem">Send reset link</button>
+                <button class="signup-btn" onclick="state.authMode='signup'; render()" style="font-size:0.95rem;background:rgba(255,255,255,0.1)">← Back</button>
+              </div>
+            </div>
+          </div>
+        `;
+          } else if (state.authMode === 'reset') {
+            app.innerHTML = `
+          <div class="signup-page">
+            <div class="signup-top">
+              <img src="logo/Foodie_white.svg" alt="Foodie" class="signup-logo-img">
+            </div>
+            <div class="signup-bottom">
+              <div class="signup-actions">
+                <p class="signup-demo-label">Set new password</p>
+                <input type="password" id="authNewPassword" placeholder="New password (min 6 chars)" style="width:100%;max-width:320px;padding:14px;border:2px solid rgba(255,255,255,0.6);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:1rem" />
+                <input type="password" id="authConfirmPassword" placeholder="Confirm password" style="width:100%;max-width:320px;padding:14px;border:2px solid rgba(255,255,255,0.6);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:1rem" />
+                <div id="authError" style="color:#ff6b6b;font-size:0.9rem;min-height:20px"></div>
+                <button class="signup-btn" onclick="handleSetNewPassword()" style="font-size:1.1rem">Set password</button>
+                <a href="#" onclick="state.authMode='signup'; if(window.FOODIE_API?.enabled)window.FOODIE_API.signOut(); if(history.replaceState)history.replaceState({},'',location.pathname); render(); return false" style="font-size:0.9rem;color:rgba(255,255,255,0.9);margin-top:12px;display:inline-block;text-decoration:underline">← Back to sign in</a>
+              </div>
+            </div>
+          </div>
+        `;
+          } else {
           app.innerHTML = `
           <div class="signup-page">
             <div class="signup-top">
@@ -1369,10 +1414,12 @@
                 <div id="authError" style="color:#ff6b6b;font-size:0.9rem;min-height:20px"></div>
                 <button class="signup-btn" onclick="handleSupabaseSignUp()" style="font-size:1.1rem">Sign up</button>
                 <button class="signup-btn" onclick="handleSupabaseSignIn()" style="font-size:1.1rem;background:rgba(255,255,255,0.15)">Log in</button>
+                <a href="#" onclick="state.authMode='forgot'; render(); return false" style="font-size:0.9rem;color:rgba(255,255,255,0.9);margin-top:12px;display:inline-block;text-decoration:underline">Forgot password?</a>
               </div>
             </div>
           </div>
         `;
+          }
         } else {
           app.innerHTML = `
           <div class="signup-page">
@@ -1758,6 +1805,40 @@
           errEl.textContent = 'Check your email to confirm your account, then log in.';
         }
       } catch (e) { if (errEl) errEl.textContent = e.message || e.toString?.() || 'Sign up failed'; }
+    }
+    async function handleForgotPassword() {
+      const api = window.FOODIE_API;
+      if (!api?.enabled) return;
+      const email = (document.getElementById('authForgotEmail')?.value || '').trim();
+      const errEl = document.getElementById('authError');
+      if (!email) { if (errEl) errEl.textContent = 'Please enter your email'; return; }
+      if (errEl) errEl.textContent = '';
+      try {
+        await api.resetPasswordForEmail(email);
+        if (errEl) { errEl.style.color = '#7bed9f'; errEl.textContent = 'Check your email for a reset link.'; }
+      } catch (e) { if (errEl) { errEl.style.color = '#ff6b6b'; errEl.textContent = e.message || 'Could not send reset email'; } }
+    }
+    async function handleSetNewPassword() {
+      const api = window.FOODIE_API;
+      if (!api?.enabled) return;
+      const newPw = (document.getElementById('authNewPassword')?.value || '');
+      const confirmPw = (document.getElementById('authConfirmPassword')?.value || '');
+      const errEl = document.getElementById('authError');
+      if (!newPw || newPw.length < 6) { if (errEl) errEl.textContent = 'Password must be at least 6 characters'; return; }
+      if (newPw !== confirmPw) { if (errEl) errEl.textContent = 'Passwords do not match'; return; }
+      if (errEl) errEl.textContent = '';
+      try {
+        await api.updateUserPassword(newPw);
+        state.authMode = 'signup';
+        if (history.replaceState) history.replaceState({}, '', location.pathname);
+        const stored = await api.loadData();
+        if (stored.user) {
+          state.user = stored.user; state.reviews = stored.reviews || []; state.comments = stored.comments || {}; state.connections = stored.connections || {}; state.connectionRequests = stored.connectionRequests || []; state.saved = stored.saved || []; state.notifications = stored.notifications || []; state.profiles = stored.profiles || {}; state.privateNotes = stored.privateNotes || {}; state.groupLists = stored.groupLists || {}; state.trustScores = stored.trustScores || {};
+          state.tab = 'feed'; state.panel = 'main';
+          if (state.pendingConnect && state.pendingConnect !== state.user.displayName) { state.tab = 'network'; state.panel = 'network'; state.addConnectionInput = state.pendingConnect; state.pendingConnect = null; }
+        }
+        render();
+      } catch (e) { if (errEl) errEl.textContent = e.message || 'Could not set password'; }
     }
     async function handleSupabaseSignIn() {
       const api = window.FOODIE_API;

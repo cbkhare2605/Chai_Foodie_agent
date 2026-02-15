@@ -306,6 +306,17 @@
     await supabase.from('profiles').update({ display_name: displayName, bio: bio || null, avatar_url: avatarUrl || null, updated_at: new Date().toISOString() }).eq('id', user.id);
   }
 
+  async function resetPasswordForEmail(email) {
+    const redirectTo = typeof location !== 'undefined' ? (location.origin + location.pathname).replace(/\/index\.html$/i, '/') : '';
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+    if (error) throw error;
+  }
+
+  async function updateUserPassword(newPassword) {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+  }
+
   window.FOODIE_API = {
     enabled: true,
     supabase,
@@ -325,6 +336,8 @@
     toggleSave,
     setPrivateNote,
     toggleList,
-    updateProfile
+    updateProfile,
+    resetPasswordForEmail,
+    updateUserPassword
   };
 })();
