@@ -180,6 +180,9 @@
     </div>
     <div id="cameraError" class="camera-error" style="display:none"></div>
   </div>
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="foodie-api.js"></script>
   <script>
     function formatDate(ts) {
       const sec = (Date.now() - ts) / 1000, m = sec/60, h = m/60, d = h/24;
@@ -314,25 +317,24 @@
       } catch (e) { console.warn('Storage save failed:', e); }
     }
 
-    const stored = loadFromStorage();
     const state = {
-      user: stored.user,
+      user: null,
       tab: 'feed',
       rating: 0,
       restaurantSearch: '',
       searchResults: [],
       selectedPlace: null,
       reviewText: '',
-      reviews: stored.reviews,
-      comments: stored.comments,
-      connections: stored.connections,
-      connectionRequests: stored.connectionRequests,
-      saved: stored.saved,
-      notifications: stored.notifications,
-      profiles: stored.profiles,
-      privateNotes: stored.privateNotes,
-      groupLists: stored.groupLists,
-      trustScores: stored.trustScores,
+      reviews: [],
+      comments: {},
+      connections: {},
+      connectionRequests: [],
+      saved: [],
+      notifications: [],
+      profiles: {},
+      privateNotes: {},
+      groupLists: {},
+      trustScores: {},
       feedSearch: '',
       mapSearch: '',
       menuOpen: false,
@@ -358,6 +360,32 @@
       savedListFilter: 'Saved',
       mapFocusRestaurant: null
     };
+    async function bootstrapApp() {
+      var stored;
+      if (window.FOODIE_API && window.FOODIE_API.enabled && window.FOODIE_API.loadData) {
+        try {
+          stored = await window.FOODIE_API.loadData();
+        } catch (e) {
+          console.warn('Foodie API load failed, using localStorage', e);
+          stored = loadFromStorage();
+        }
+      } else {
+        stored = loadFromStorage();
+      }
+      state.user = stored.user;
+      state.reviews = stored.reviews || [];
+      state.comments = stored.comments || {};
+      state.connections = stored.connections || {};
+      state.connectionRequests = stored.connectionRequests || [];
+      state.saved = stored.saved || [];
+      state.notifications = stored.notifications || [];
+      state.profiles = stored.profiles || {};
+      state.privateNotes = stored.privateNotes || {};
+      state.groupLists = stored.groupLists || {};
+      state.trustScores = stored.trustScores || {};
+      render();
+      handleDeepLink();
+    }
 
     let searchTimer = null;
     async function nominatimSearch(query, viewbox) {
@@ -1689,8 +1717,7 @@
     window.viewRestaurantDetail = viewRestaurantDetail;
     window.showRestaurantOnMap = showRestaurantOnMap;
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-    render();
-    handleDeepLink();
+    bootstrapApp();
     window.addEventListener('popstate', () => { const p = new URLSearchParams(location.search); if (p.get('review')) handleDeepLink(); });
   </script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
