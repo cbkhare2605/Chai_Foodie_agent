@@ -156,6 +156,8 @@
     .feed-search input, .map-search input { width: 100%; padding: 12px 16px; font-size: 1rem; border: none; border-radius: 8px; }
     .feed-filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
     
+    .list-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 12px 20px; border-radius: 8px; font-size: 0.95rem; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.3); animation: listToastFade 2.5s ease forwards; }
+    @keyframes listToastFade { 0%, 70% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
     .list-trigger-btn { min-width: 44px; min-height: 44px; }
     .list-dropdown-menu { transition: transform 0.2s ease; }
     @media (max-width: 600px) {
@@ -560,6 +562,16 @@
       if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.toggleSave(k, add); } catch (e) { console.warn(e); } } else saveToStorage();
       render();
     }
+    function showListToast(msg) {
+      const old = document.getElementById('listToast');
+      if (old) old.remove();
+      const el = document.createElement('div');
+      el.id = 'listToast';
+      el.className = 'list-toast';
+      el.textContent = msg;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2500);
+    }
     async function addToList(reviewId, listName) {
       const r = state.reviews.find(x => x.id === reviewId);
       if (!r || !listName || listName === 'Saved') return;
@@ -567,6 +579,7 @@
       if (!state.groupLists[listName]) state.groupLists[listName] = [];
       if (!state.groupLists[listName].includes(k)) state.groupLists[listName].push(k);
       if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.toggleList(listName, k, true); } catch (e) { console.warn(e); } } else saveToStorage();
+      showListToast('Added to ' + listName);
       render();
     }
     async function removeFromList(reviewId, listName) {
@@ -576,6 +589,7 @@
       if (listName === 'Saved') { const i = state.saved.indexOf(k); if (i >= 0) state.saved.splice(i, 1); }
       else if (state.groupLists[listName]) { const arr = state.groupLists[listName]; const i = arr.indexOf(k); if (i >= 0) arr.splice(i, 1); }
       if (window.FOODIE_API?.enabled) { try { if (listName === 'Saved') await window.FOODIE_API.toggleSave(k, false); else await window.FOODIE_API.toggleList(listName, k, false); } catch (e) { console.warn(e); } } else saveToStorage();
+      showListToast('Removed from ' + listName);
       render();
     }
     async function toggleList(reviewId, listName) {
