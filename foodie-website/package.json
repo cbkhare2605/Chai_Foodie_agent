@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:pwa": "cp foodie.html pwa/public/index.html && python3 -m http.server 8080 --directory pwa/public",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },

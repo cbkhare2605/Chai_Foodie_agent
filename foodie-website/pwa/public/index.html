@@ -123,9 +123,12 @@
     .filter-btn:nth-child(2) { background: #006CE0; }
     .filter-btn:nth-child(3) { background: #ff8d00; }
     .filter-active { box-shadow: inset 0 0 0 3px white; }
-    #map-container { height: 350px; width: 100%; border-radius: 12px; overflow: hidden; }
+    #map-container { height: 420px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; }
     .map-marker.leaflet-marker-icon { background: none !important; border: none !important; }
     .map-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem; color: #666; flex-wrap: wrap; }
+    .map-controls { position: absolute; top: 12px; right: 12px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
+    .map-control-btn { width: 40px; height: 40px; border-radius: 50%; background: white; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; }
+    .user-location-marker.leaflet-marker-icon { background: none !important; border: none !important; }
     .map-legend-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
     
     .feed-search, .map-search { margin-bottom: 12px; }
@@ -308,6 +311,8 @@
       addConnectionInput: '',
       mapCuisine: '',
       mapPrice: '',
+      mapMinRating: 0,
+      userLocation: null,
       addCuisine: '',
       addPrice: 2,
       addPhotos: [],
@@ -528,6 +533,23 @@
       const pendingFromMe = reqs.filter(r => r.from === me && r.status === 'pending').map(r => r.to);
       return allUsers.filter(u => u !== me && !conns.includes(u) && !pendingFromMe.includes(u));
     }
+    function getPeopleYouMightKnow() {
+      const me = state.user?.displayName;
+      if (!me) return [];
+      const myConns = state.connections[me] || [];
+      const pendingFromMe = (state.connectionRequests || []).filter(r => r.from === me && r.status === 'pending').map(r => r.to);
+      const suggestions = [];
+      const mutualCount = {};
+      myConns.forEach(friend => {
+        const friendsOfFriend = state.connections[friend] || [];
+        friendsOfFriend.forEach(person => {
+          if (person === me || myConns.includes(person) || pendingFromMe.includes(person)) return;
+          if (!suggestions.includes(person)) suggestions.push(person);
+          mutualCount[person] = (mutualCount[person] || 0) + 1;
+        });
+      });
+      return suggestions.map(name => ({ name, mutual: mutualCount[name] || 0 })).sort((a, b) => b.mutual - a.mutual);
+    }
     function getPendingRequestsFromMe() {
       return (state.connectionRequests || []).filter(r => r.from === state.user?.displayName && r.status === 'pending');
     }
@@ -739,15 +761,27 @@
       else if (state.mapFilter === '2') list = list.filter(r => getEffectiveLevel(r) === 2);
       if (state.mapCuisine) list = list.filter(r => (r.cuisine||'Various') === state.mapCuisine);
       if (state.mapPrice) list = list.filter(r => (r.price||2) <= parseInt(state.mapPrice));
+      const minR = parseInt(state.mapMinRating) || 0;
+      if (minR > 0) list = list.filter(r => (r.rating||0) >= minR);
       const byLocation = {};
       list.forEach(r => {
         const k = r.lat + ',' + r.lng;
         const lvl = getEffectiveLevel(r);
-        if (!byLocation[k] || lvl < (byLocation[k].level || 3)) {
-          byLocation[k] = { name: r.restaurant, lat: r.lat, lng: r.lng, level: lvl };
+        if (!byLocation[k]) {
+          byLocation[k] = { name: r.restaurant, lat: r.lat, lng: r.lng, level: lvl, reviews: [], cuisines: new Set(), prices: [] };
         }
+        const loc = byLocation[k];
+        if (lvl < (loc.level || 3)) loc.level = lvl;
+        loc.reviews.push(r);
+        if (r.cuisine) loc.cuisines.add(r.cuisine);
+        if (r.price) loc.prices.push(r.price);
       });
-      return Object.values(byLocation);
+      return Object.values(byLocation).map(loc => ({
+        ...loc,
+        cuisines: [...loc.cuisines].filter(Boolean),
+        avgRating: loc.reviews.length ? (loc.reviews.reduce((s,r)=>s+(r.rating||0),0) / loc.reviews.length).toFixed(1) : '-',
+        price: loc.prices.length ? Math.max(...loc.prices) : 2
+      }));
     }
 
     function getFilteredReviews() {
@@ -849,6 +883,46 @@
       if (state.tab === 'map') initMap();
     }
 
+    async function geocodeMapSearch() {
+      const el = document.getElementById('mapSearchInput');
+      const q = (el?.value || state.mapSearch || '').trim();
+      if (!q) return;
+      const coords = await geocodePlace(q);
+      if (coords && map) {
+        map.setView([coords.lat, coords.lng], 14);
+      }
+    }
+
+    function myLocationMap() {
+      if (!navigator.geolocation || !map) return;
+      const showError = (msg) => { try { alert(msg || 'Could not get your location. Check that location is enabled.'); } catch (e) {} };
+      const timeout = setTimeout(() => showError('Location request timed out.'), 15000);
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          clearTimeout(timeout);
+          const { latitude, longitude } = pos.coords;
+          state.userLocation = { lat: latitude, lng: longitude };
+          if (userLocationMarker && map.hasLayer(userLocationMarker)) map.removeLayer(userLocationMarker);
+          const icon = L.divIcon({
+            className: 'user-location-marker',
+            html: '<div style="width:20px;height:20px;background:#2196F3;border:3px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          });
+          userLocationMarker = L.marker([latitude, longitude], { icon }).addTo(map);
+          userLocationMarker.bindPopup('You are here');
+          map.flyTo([latitude, longitude], 15, { duration: 0.8 });
+        },
+        err => {
+          clearTimeout(timeout);
+          if (err.code === 1) showError('Location access denied. Enable location in your browser or device settings.');
+          else if (err.code === 2) showError('Location unavailable.');
+          else showError();
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+      );
+    }
+
     function render() {
       const app = document.getElementById('app');
       if (!state.user) {
@@ -916,7 +990,7 @@
         const listCounts = { Saved: savedReviews.length };
         GROUP_LIST_NAMES.filter(n=>n!=='Saved').forEach(n => { listCounts[n] = (state.groupLists[n]||[]).length; });
         mainContent = `<div class="main">
-          <div style="margin-bottom:12px"><button onclick="state.panel='main'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
+          <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
           <h2 style="margin-bottom:16px">Lists</h2>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
             ${GROUP_LIST_NAMES.map(name=>`<button onclick="state.savedListFilter='${name}'; render()" style="padding:8px 14px;border-radius:8px;border:1px solid #ddd;background:${listName===name?'#e31919':''};color:${listName===name?'white':'#333'};cursor:pointer;font-size:0.9rem">${name} (${listCounts[name]||0})</button>`).join('')}
@@ -927,10 +1001,18 @@
       } else if (state.panel === 'network') {
         const pendingForMe = getPendingRequestsForMe();
         const peopleToAdd = getPeopleYouCanAdd();
+        const peopleYouMightKnow = getPeopleYouMightKnow();
         const conns = state.connections[state.user?.displayName] || [];
         mainContent = `<div class="main">
-          <div style="margin-bottom:12px"><button onclick="state.panel='main'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
+          <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
           <h2 style="margin-bottom:20px">Network</h2>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:20px">Connect with people you know to see their restaurant reviews. Add friends who aren't on Foodie yet—they'll get your request when they sign up.</p>
+          <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Invite someone you know</h3>
+          <p style="font-size:0.85rem;color:#666;margin-bottom:8px">Type a name to send a connection request. Works even if they're not on the app yet.</p>
+          <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap">
+            <input type="text" id="inviteNameInput" placeholder="e.g. John, Priya Sharma" value="${(state.addConnectionInput||'').replace(/"/g,'&quot;')}" oninput="state.addConnectionInput=this.value" style="flex:1;min-width:180px;padding:12px 16px;border:1px solid #ddd;border-radius:8px;font-size:1rem">
+            <button onclick="var n=document.getElementById('inviteNameInput')?.value?.trim(); if(n){sendConnectionRequest(n); state.addConnectionInput=''; if(n)document.getElementById('inviteNameInput').value=''; render()}" style="padding:12px 20px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Send invite</button>
+          </div>
           ${pendingForMe.length ? `
           <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Invitations (${pendingForMe.length})</h3>
           <p style="font-size:0.9rem;color:#666;margin-bottom:12px">These people want to connect with you. Approve to add them to your network.</p>
@@ -950,6 +1032,22 @@
             </div>
           `).join('')}</div>
           ` : ''}
+          ${peopleYouMightKnow.length ? `
+          <h3 style="margin-bottom:12px;font-size:1rem;color:#333">People you might know</h3>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:12px">Friends of your connections. Connect to see their reviews.</p>
+          <div style="margin-bottom:24px">${peopleYouMightKnow.map(p=>`
+            <div class="network-card" style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div class="review-avatar" style="width:48px;height:48px;font-size:1rem">${getInitials(p.name)}</div>
+                <div>
+                  <div style="font-weight:600">${p.name}</div>
+                  ${p.mutual ? `<div style="font-size:0.8rem;color:#0a66c2">${p.mutual} mutual connection${p.mutual>1?'s':''}</div>` : ''}
+                </div>
+              </div>
+              <button onclick="sendConnectionRequest('${(p.name||'').replace(/'/g,"\\'")}'); render()" style="padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Connect</button>
+            </div>
+          `).join('')}</div>
+          ` : ''}
           ${(getPendingRequestsFromMe()).length ? `
           <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Pending (sent)</h3>
           <p style="font-size:0.9rem;color:#666;margin-bottom:12px">Waiting for these people to approve your request.</p>
@@ -960,24 +1058,24 @@
             </div>
           `).join('')}</div>
           ` : ''}
-          <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Add to your network</h3>
-          <p style="font-size:0.9rem;color:#666;margin-bottom:12px">People you can connect with. They'll need to approve your request.</p>
+          <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Add from reviews</h3>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:12px">People who have reviewed restaurants. Connect to see their full feed.</p>
           <div style="margin-bottom:24px">${peopleToAdd.length ? peopleToAdd.map(u=>`
             <div class="network-card" style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
               <div style="display:flex;align-items:center;gap:12px">
                 <div class="review-avatar" style="width:48px;height:48px;font-size:1rem">${getInitials(u)}</div>
                 <div style="font-weight:600">${u}</div>
               </div>
-              <button onclick="sendConnectionRequest('${u}'); render()" style="padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Connect</button>
+              <button onclick="sendConnectionRequest('${(u||'').replace(/'/g,"\\'")}'); render()" style="padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Connect</button>
             </div>
-          `).join('') : '<p style="color:#666;padding:16px;background:#f9f9f9;border-radius:8px">No one to add right now. Everyone in your network is already connected!</p>'}</div>
+          `).join('') : '<p style="color:#666;padding:16px;background:#f9f9f9;border-radius:8px">No one to add from reviews right now.</p>'}</div>
           <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Your connections (${conns.length})</h3>
-          <div>${conns.length ? conns.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,0.06)"><span>${c}</span><button onclick="removeConnection('${c}'); render()" style="padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">Remove</button></div>`).join('') : '<p style="color:#666">No connections yet. Send requests above and wait for approval.</p>'}</div>
+          <div>${conns.length ? conns.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,0.06)"><span>${c}</span><button onclick="removeConnection('${(c||'').replace(/'/g,"\\'")}'); render()" style="padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">Remove</button></div>`).join('') : '<p style="color:#666">No connections yet. Invite people above or connect from reviews.</p>'}</div>
         </div>`;
       } else if (state.panel === 'notifications') {
         const notifs = state.notifications.filter(n => !n.recipient || n.recipient === state.user?.displayName).slice().reverse();
         mainContent = `<div class="main">
-          <div style="margin-bottom:12px"><button onclick="state.panel='main'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
+          <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
           <h2 style="margin-bottom:16px">Notifications</h2>
           ${notifs.length ? notifs.map(n=>`<div style="padding:12px;background:white;border-radius:8px;margin-bottom:8px;${n.read?'opacity:0.7':''}${n.type==='connection_request'?'cursor:pointer':''}" ${n.type==='connection_request'?'onclick="state.panel=\'network\'; render()"':''}>${n.text}${n.type==='connection_request'?' — Tap to view in Network':''}</div>`).join('') + `<button onclick="state.notifications.forEach(n=>{if(!n.recipient||n.recipient===state.user?.displayName)n.read=true}); saveToStorage(); render()" style="margin-top:12px;padding:8px 16px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer">Mark all read</button>` : '<p style="color:#666">No notifications yet.</p>'}
         </div>`;
@@ -987,7 +1085,7 @@
         const avgRating = restReviews.length ? (restReviews.reduce((s,r)=>s+(r.rating||0),0) / restReviews.length).toFixed(1) : '-';
         const cuisines = [...new Set(restReviews.map(r=>r.cuisine||'Various'))];
         mainContent = `<div class="main">
-          <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.viewRestaurant=null; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
+          <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; state.viewRestaurant=null; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
           <div style="padding:20px;background:white;border-radius:12px;margin-bottom:16px">
             <h1 style="font-size:1.5rem;margin-bottom:8px">${vr.name}</h1>
             <div style="display:flex;gap:16px;flex-wrap:wrap;color:#666;font-size:0.95rem">
@@ -1008,7 +1106,7 @@
         </div></div>`;
       } else if (state.tab === 'feed' || state.panel === 'myreviews') {
         mainContent = '<div class="main">' +
-          (state.panel === 'myreviews' ? `<div style="margin-bottom:12px"><button onclick="state.panel='main'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>` : '') +
+          (state.panel === 'myreviews' ? `<div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>` : '') +
           (state.panel === 'main' ? `<div class="feed-search"><input type="text" id="feedSearchInput" placeholder="Search reviews, restaurants, or people..." value="${(state.feedSearch||'').replace(/"/g,'&quot;')}" oninput="state.feedSearch=this.value; updateFeedCards()"></div>
             <div class="feed-filters">
               <select onchange="state.feedCuisine=this.value; updateFeedCards()" style="padding:8px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem">
@@ -1072,7 +1170,10 @@
         const l2 = state.reviews.filter(r=>getEffectiveLevel(r)===2).length;
         mainContent = `
           <div class="main">
-            <div class="map-search"><input type="text" id="mapSearchInput" placeholder="Search restaurant or location..." value="${(state.mapSearch||'').replace(/"/g,'&quot;')}" oninput="updateMapSearch()"></div>
+            <div class="map-search" style="display:flex;gap:8px">
+              <input type="text" id="mapSearchInput" placeholder="Search restaurant or place (Enter to go to location)" value="${(state.mapSearch||'').replace(/"/g,'&quot;')}" oninput="updateMapSearch()" onkeydown="if(event.key==='Enter'){event.preventDefault();geocodeMapSearch()}">
+              <button onclick="geocodeMapSearch()" style="padding:10px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;white-space:nowrap">Go</button>
+            </div>
             <div class="map-filters">
               <button class="filter-btn ${state.mapFilter==='all'?'filter-active':''}" onclick="filterMap('all')">📍 Total (${total})</button>
               <button class="filter-btn ${state.mapFilter==='1'?'filter-active':''}" onclick="filterMap('1')">📍 1st Level (${l1})</button>
@@ -1085,8 +1186,18 @@
               <select onchange="state.mapPrice=this.value; filterMap(state.mapFilter)" style="padding:8px;border-radius:8px;border:1px solid #ddd">
                 <option value="">Any price</option>${[1,2,3,4].map(p=>`<option value="${p}" ${state.mapPrice==p?'selected':''}>Up to ${PRICE_LABELS[p-1]}</option>`).join('')}
               </select>
+              <select onchange="state.mapMinRating=this.value; filterMap(state.mapFilter)" style="padding:8px;border-radius:8px;border:1px solid #ddd">
+                <option value="0">Any rating</option>
+                <option value="4" ${state.mapMinRating==4?'selected':''}>4+ stars</option>
+                <option value="5" ${state.mapMinRating==5?'selected':''}>5 stars only</option>
+              </select>
             </div>
-            <div id="map-container"></div>
+            <div style="position:relative">
+              <div id="map-container"></div>
+              <div class="map-controls" id="mapControls">
+                <button class="map-control-btn" onclick="myLocationMap()" title="My location">📍</button>
+              </div>
+            </div>
             <div class="map-legend">
               <span><span class="map-legend-dot" style="background:#006CE0"></span> 1st level</span>
               <span><span class="map-legend-dot" style="background:#FF8D00"></span> 2nd level</span>
@@ -1127,6 +1238,7 @@
           <nav class="tabs">
             <button class="tab ${state.tab==='feed'?'active':''}" onclick="setTab('feed')">📋 Feed</button>
             <button class="tab ${state.tab==='add'?'active':''}" onclick="setTab('add')">➕ Add</button>
+            <button class="tab ${state.tab==='network'?'active':''}" onclick="setTab('network')">👥 Network</button>
             <button class="tab ${state.tab==='map'?'active':''}" onclick="setTab('map')">📍 Map</button>
           </nav>
         </div>
@@ -1152,6 +1264,7 @@
     let map = null;
     let markers = [];
     let markerCluster = null;
+    let userLocationMarker = null;
 
     function login(name) { state.user = { displayName: name || 'Demo User' }; saveToStorage(); render(); }
     function logout() {
@@ -1166,7 +1279,7 @@
       Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
       render();
     }
-    function setTab(t) { state.tab = t; state.panel = 'main'; if (t !== 'add') state.editingReview = null; render(); if (t === 'map') setTimeout(initMap, 50); }
+    function setTab(t) { state.tab = t; state.panel = t === 'network' ? 'network' : 'main'; if (t !== 'add') state.editingReview = null; render(); if (t === 'map') setTimeout(initMap, 50); }
     function filterMap(f) { state.mapFilter = f; render(); setTimeout(function(){ if (state.tab === 'map') initMap(); }, 50); }
     function setRating(n) { state.rating = n; render(); }
 
@@ -1175,7 +1288,7 @@
       if (!el) return;
       if (typeof L === 'undefined') { setTimeout(initMap, 100); return; }
       try { if (map) map.remove(); } catch (e) {}
-      map = null; markers = [];
+      map = null; markers = []; userLocationMarker = null;
       const restaurants = getMapRestaurants();
       const q = (state.mapSearch || '').toLowerCase().trim();
       const filtered = q ? restaurants.filter(r => (r.name||'').toLowerCase().includes(q)) : restaurants;
@@ -1184,6 +1297,22 @@
       map = L.map('map-container').setView(center, 10);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
       const levelColors = { 1: '#006CE0', 2: '#FF8D00', 3: '#e31919' };
+      function buildMapPopup(r) {
+        const color = levelColors[r.level] || levelColors[2];
+        const firstPhoto = (r.reviews || []).flatMap(rev => getReviewPhotoUrls(rev)).find(Boolean);
+        const cuisineStr = (r.cuisines && r.cuisines.length) ? r.cuisines.join(', ') : 'Various';
+        const priceStr = PRICE_LABELS[(r.price||2)-1] || '$$';
+        const dirUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + r.lat + ',' + r.lng;
+        return '<div class="map-popup" style="min-width:180px;max-width:260px">' +
+          (firstPhoto ? '<img src="' + firstPhoto + '" alt="" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:6px" onerror="this.style.display=\'none\'">' : '') +
+          '<strong>' + (r.name||'').replace(/</g,'&lt;') + '</strong><br>' +
+          '<span style="color:' + color + '">● ' + (r.level===1?'1st level':r.level===2?'2nd level':'Your review') + '</span><br>' +
+          '<span style="font-size:0.85rem;color:#666">' + cuisineStr + ' · ' + priceStr + '</span><br>' +
+          '<span style="font-size:0.85rem">' + (r.avgRating !== '-' ? r.avgRating + ' ★' : '-') + ' · ' + (r.reviews?.length||0) + ' review' + ((r.reviews?.length||0)===1?'':'s') + '</span><br>' +
+          '<a href="' + dirUrl + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#0a66c2;color:white;border-radius:6px;text-decoration:none;font-size:0.9rem">Get directions</a> ' +
+          '<button onclick="window.viewRestaurantDetail(\'' + (r.name||'').replace(/'/g,"\\'") + '\', ' + r.lat + ', ' + r.lng + ')" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">View details</button>' +
+          '</div>';
+      }
       if (typeof L !== 'undefined' && L.markerClusterGroup) {
         if (markerCluster) map.removeLayer(markerCluster);
         markerCluster = L.markerClusterGroup();
@@ -1195,7 +1324,7 @@
             iconSize: [24, 24],
             iconAnchor: [12, 12]
           });
-          const m = L.marker([r.lat, r.lng], { icon }).bindPopup(`<strong>${r.name}</strong><br><span style="color:${color}">● ${r.level===1?'1st level':r.level===2?'2nd level':'Your review'}</span><br><button onclick="window.viewRestaurantDetail('${(r.name||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="margin-top:6px;padding:6px 12px;background:#0a66c2;color:white;border:none;border-radius:6px;cursor:pointer">View details</button>`);
+          const m = L.marker([r.lat, r.lng], { icon }).bindPopup(buildMapPopup(r));
           markerCluster.addLayer(m);
           markers.push(m);
         });
@@ -1209,7 +1338,7 @@
             iconSize: [24, 24],
             iconAnchor: [12, 12]
           });
-          const m = L.marker([r.lat, r.lng], { icon }).addTo(map).bindPopup(`<strong>${r.name}</strong><br><span style="color:${color}">● ${r.level===1?'1st level':r.level===2?'2nd level':'Your review'}</span>`);
+          const m = L.marker([r.lat, r.lng], { icon }).addTo(map).bindPopup(buildMapPopup(r));
           markers.push(m);
         });
       }
@@ -1218,6 +1347,17 @@
         const bounds = L.latLngBounds(toShow.map(r => [r.lat, r.lng]));
         map.fitBounds(bounds, { padding: [20, 20], maxZoom: 15 });
       }
+      if (state.userLocation && userLocationMarker) {
+        try { if (map.hasLayer(userLocationMarker)) map.removeLayer(userLocationMarker); } catch (e) {}
+        const icon = L.divIcon({
+          className: 'user-location-marker',
+          html: '<div style="width:20px;height:20px;background:#2196F3;border:3px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>',
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+        userLocationMarker = L.marker([state.userLocation.lat, state.userLocation.lng], { icon }).addTo(map);
+        userLocationMarker.bindPopup('You are here');
+      } else userLocationMarker = null;
     }
 
     function zoomMapToSearch() {

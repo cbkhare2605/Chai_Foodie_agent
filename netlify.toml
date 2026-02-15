@@ -1,0 +1,3 @@
+[build]
+  publish = "foodie-website/pwa"
+  command = ""

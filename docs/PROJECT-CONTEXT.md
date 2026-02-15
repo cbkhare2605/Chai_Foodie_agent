@@ -54,6 +54,12 @@
 - **Where:** `foodie-website/`, `docs/PROJECT-WORK-LOG.md`, `.gitignore`.
 - **Decisions / notes:** Option C (GitHub + Vercel) recommended for shareable link and auto-deploy. User completes Steps 1–4 in DEPLOY-OPTION-C.md to get live URL.
 
+### 2025-02-14 — Software Integrator — Network tab enhancements
+
+- **What:** Enhanced Network with: (1) Invite by name – add anyone by typing their name, even if not on app yet; (2) People you might know – suggestions from 2nd-level connections (friends of friends) with mutual count; (3) Network as top-level tab. Reordered sections: Invite, Invitations, People you might know, Add from reviews, Your connections.
+- **Where:** `foodie-website/foodie.html`.
+- **Decisions / notes:** getPeopleYouMightKnow() returns friends-of-friends sorted by mutual connections.
+
 ---
 
 ## Active areas and owners

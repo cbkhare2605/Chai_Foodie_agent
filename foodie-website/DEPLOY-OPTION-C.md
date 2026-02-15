@@ -43,6 +43,7 @@ git push -u origin main
 
 4. **Configure:**
    - **Root Directory:** Click **Edit** → set to `foodie-website/pwa`
+   - **Output Directory:** Leave empty, or set to `public` (Vercel serves from `public` for static sites)
    - **Framework Preset:** Other (or leave default)
    - **Build Command:** Leave empty (static site)
    - **Output Directory:** Leave empty
@@ -79,6 +80,27 @@ git push
 ```
 
 Vercel will redeploy automatically. The same URL stays the same; the app updates.
+
+---
+
+## Development workflow
+
+**Edit** `foodie.html` (main app) → **Sync & test** → **Deploy**
+
+```bash
+cd foodie-website
+./dev-pwa.sh
+# Or: npm run dev:pwa
+```
+
+This copies `foodie.html` to `pwa/public/index.html` and starts a local server at http://localhost:8080.
+
+When ready to deploy:
+```bash
+git add .
+git commit -m "Your changes"
+git push
+```
 
 ---
 
