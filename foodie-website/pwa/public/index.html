@@ -859,7 +859,8 @@
       setTab('add');
     }
 
-    function cancelEdit() {
+    function cancelEdit() { discardReview(); }
+    function discardReview() {
       state.editingReview = null;
       state.rating = 0;
       state.reviewText = '';
@@ -1679,7 +1680,7 @@
             </div>
             <textarea class="add-review-textarea" placeholder="Write your review..." maxlength="${MAX_REVIEW_TEXT}" oninput="state.reviewText=this.value">${(state.reviewText||'').replace(/</g,'&lt;')}</textarea>
             <button class="add-review-submit" onclick="addReview()">${isEditing ? 'Update Review' : 'Post Review'}</button>
-            ${isEditing ? `<button class="add-review-cancel" onclick="cancelEdit()">Cancel</button>` : ''}
+            <button class="add-review-cancel" onclick="discardReview()">${isEditing ? 'Cancel' : 'Discard'}</button>
           </div>
         `;
       } else if (state.tab === 'map' && state.panel === 'main') {
