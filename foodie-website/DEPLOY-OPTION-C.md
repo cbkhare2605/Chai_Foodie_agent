@@ -42,7 +42,7 @@ git push -u origin main
 3. **Import** your GitHub repo (`Chai_Foodie_agent` or whatever you named it).
 
 4. **Configure:**
-   - **Root Directory:** Click **Edit** → set to `foodie-website`
+   - **Root Directory:** Click **Edit** → set to `foodie-website/pwa`
    - **Framework Preset:** Other (or leave default)
    - **Build Command:** Leave empty (static site)
    - **Output Directory:** Leave empty
