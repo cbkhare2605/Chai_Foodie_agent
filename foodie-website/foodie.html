@@ -527,6 +527,12 @@
     function selectPlaceByIndex(i) {
       if (state.searchResults[i]) selectPlace(state.searchResults[i]);
     }
+    function useTypedNameAsPlace() {
+      const name = (document.getElementById('addReviewRestaurantInput')?.value || state.restaurantSearch || '').trim();
+      if (!name) return;
+      const loc = state.userLocation || { lat: 37.37, lng: -122.03 };
+      selectPlace({ name: name, lat: loc.lat, lng: loc.lng });
+    }
 
     function toggleLike(id) {
       const r = state.reviews.find(x => x.id === id);
@@ -1140,14 +1146,15 @@
         cancelEdit();
         return;
       }
+      const inputName = (document.getElementById('addReviewRestaurantInput')?.value || state.restaurantSearch || '').trim();
       let place = state.selectedPlace;
-      if (!place && state.restaurantSearch.trim()) {
-        const name = state.restaurantSearch.trim();
-        place = { name: name, lat: 37.37, lng: -122.03 };
-        const geocoded = await geocodePlace(name);
-        if (geocoded) place = { name: name, lat: geocoded.lat, lng: geocoded.lng };
+      if (!place && inputName) {
+        const loc = state.userLocation || { lat: 37.37, lng: -122.03 };
+        place = { name: inputName, lat: loc.lat, lng: loc.lng };
+        const geocoded = await geocodePlace(inputName);
+        if (geocoded) place = { name: inputName, lat: geocoded.lat, lng: geocoded.lng };
       }
-      if (!place) { alert('Please select a restaurant.'); return; }
+      if (!place && !inputName) { alert('Please enter a restaurant name.'); return; }
       const restName = (place.name || state.restaurantSearch.trim() || '').slice(0, MAX_RESTAURANT_NAME);
       state.reviews.unshift({
         id: Date.now().toString(),
@@ -1650,13 +1657,16 @@
         mainContent = `
           <div class="main add-review-page">
             <div style="position:relative">
-              <input type="text" class="add-review-input" id="addReviewRestaurantInput" placeholder="${isEditing ? 'Change restaurant or address (search to update)' : 'Type restaurant name (suggestions near you)'}" 
+              <input type="text" class="add-review-input" id="addReviewRestaurantInput" placeholder="${isEditing ? 'Change restaurant or address' : 'Restaurant name or address (optional: pick from suggestions)'}" 
                 value="${(state.restaurantSearch||'').replace(/"/g,'&quot;')}" 
-                oninput="searchRestaurants(this.value)" onfocus="requestUserLocationIfNeeded()">
-              <div id="addReviewSearchResults" class="search-results" style="display:${state.searchResults.length?'block':'none'}">${state.searchResults.map((p, i) => `
+                oninput="state.restaurantSearch=this.value; searchRestaurants(this.value)" onfocus="requestUserLocationIfNeeded()" onblur="setTimeout(function(){state.searchResults=[];updateAddReviewSearchResults();},150)">
+              <div id="addReviewSearchResults" class="search-results" style="display:${state.searchResults.length?'block':'none'}">
+                ${state.restaurantSearch.trim() && state.searchResults.length ? `<div class="search-result-item" style="font-weight:600;color:#0a66c2" onclick="useTypedNameAsPlace()">✓ Use &quot;${escapeHtml(state.restaurantSearch.trim().slice(0,40))}${state.restaurantSearch.trim().length>40?'...':''}&quot; as entered</div>` : ''}
+                ${state.searchResults.map((p, i) => `
                 <div class="search-result-item" onclick="selectPlaceByIndex(${i})">${escapeHtml(p.name)}</div>
               `).join('')}</div>
             </div>
+            <p style="font-size:0.85rem;color:#666;margin:-8px 0 0 0">Type a name or pick from suggestions. Either works.</p>
             <div class="add-review-rating">
               <span>Rating</span>
               <div class="rating-hearts">
