@@ -400,6 +400,7 @@
       state.trustScores = stored.trustScores || {};
       render();
       handleDeepLink();
+      setupAutoRefresh();
     }
 
     async function refreshFeed() {
@@ -418,6 +419,14 @@
         state.trustScores = stored.trustScores || {};
         render();
       } catch (e) { console.warn('Refresh failed', e); }
+    }
+    function setupAutoRefresh() {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && state.user && window.FOODIE_API?.enabled) refreshFeed();
+      });
+      setInterval(() => {
+        if (document.visibilityState === 'visible' && state.user && window.FOODIE_API?.enabled) refreshFeed();
+      }, 60000);
     }
 
     let searchTimer = null;
@@ -2014,7 +2023,13 @@
 
     window.viewRestaurantDetail = viewRestaurantDetail;
     window.showRestaurantOnMap = showRestaurantOnMap;
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        setInterval(() => reg.update(), 30 * 60 * 1000);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
+      }).catch(() => {});
+      navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+    }
     bootstrapApp();
     window.addEventListener('popstate', () => { const p = new URLSearchParams(location.search); if (p.get('review')) handleDeepLink(); });
   </script>
