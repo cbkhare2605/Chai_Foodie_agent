@@ -364,7 +364,8 @@
       addVerifiedVisit: false,
       addWouldGoAgain: true,
       savedListFilter: 'Saved',
-      mapFocusRestaurant: null
+      mapFocusRestaurant: null,
+      pendingConnect: null
     };
     async function bootstrapApp() {
       var stored;
@@ -530,6 +531,34 @@
     function shareReview(id) {
       const url = location.origin + location.pathname + (location.pathname.endsWith('/') ? '' : '/') + '?review=' + id;
       navigator.clipboard.writeText(url).then(() => alert('Link copied! Share it with friends.')).catch(() => prompt('Copy this link:', url));
+    }
+
+    async function shareApp() {
+      const baseUrl = location.href.split('?')[0].replace(/\/index\.html$/i, '/');
+      const appUrl = baseUrl + (state.user?.displayName ? '?connect=' + encodeURIComponent(state.user.displayName) : '');
+      const message = 'Check out Foodie – restaurant reviews from people you trust. Add to your home screen for the best experience (iPhone: tap Share → Add to Home Screen; Android: tap menu ⋮ → Add to Home Screen). ' + appUrl;
+      closeMenu();
+      try {
+        if (navigator.share) {
+          await navigator.share({
+            title: 'Foodie',
+            text: 'Check out Foodie – restaurant reviews from people you trust. Add to your home screen for the best experience (iPhone: Share → Add to Home Screen; Android: menu ⋮ → Add to Home Screen).',
+            url: appUrl
+          });
+          showListToast('Shared!');
+        } else {
+          throw new Error('Share not supported');
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        try {
+          await navigator.clipboard.writeText(message);
+          showListToast('Link copied! Paste and send to share.');
+        } catch (e2) {
+          showListToast('Copy this link: ' + appUrl);
+          prompt('Copy this link:', appUrl);
+        }
+      }
     }
 
     function getSavedKey(r) { return (r.lat + ',' + r.lng + '|' + (r.restaurant||'')).slice(0,80); }
@@ -1657,6 +1686,7 @@
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='saved'; render()">Saved (${state.saved.length})</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='network'; render()">Network ${getPendingRequestsForMe().length ? `(${getPendingRequestsForMe().length})` : ''}</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='notifications'; render()">Notifications ${state.notifications.filter(n=>(!n.recipient||n.recipient===state.user?.displayName)&&!n.read).length ? `(${state.notifications.filter(n=>(!n.recipient||n.recipient===state.user?.displayName)&&!n.read).length})` : ''}</button>
+            <button class="menu-sidebar-item" onclick="shareApp()">📤 Share app</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='feedback'; render()">Feedback</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); logout()">Logout</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); clearAllData()">Clear all data</button>
@@ -1721,6 +1751,7 @@
         if (stored.user) {
           state.user = stored.user; state.reviews = stored.reviews || []; state.comments = stored.comments || {}; state.connections = stored.connections || {}; state.connectionRequests = stored.connectionRequests || []; state.saved = stored.saved || []; state.notifications = stored.notifications || []; state.profiles = stored.profiles || {}; state.privateNotes = stored.privateNotes || {}; state.groupLists = stored.groupLists || {}; state.trustScores = stored.trustScores || {};
           state.tab = 'feed'; state.panel = 'main';
+          if (state.pendingConnect && state.pendingConnect !== state.user.displayName) { state.tab = 'network'; state.panel = 'network'; state.addConnectionInput = state.pendingConnect; state.pendingConnect = null; }
           render();
         } else {
           errEl.textContent = 'Check your email to confirm your account, then log in.';
@@ -1746,6 +1777,7 @@
         if (stored.user) {
           state.user = stored.user; state.reviews = stored.reviews || []; state.comments = stored.comments || {}; state.connections = stored.connections || {}; state.connectionRequests = stored.connectionRequests || []; state.saved = stored.saved || []; state.notifications = stored.notifications || []; state.profiles = stored.profiles || {}; state.privateNotes = stored.privateNotes || {}; state.groupLists = stored.groupLists || {}; state.trustScores = stored.trustScores || {};
           state.tab = 'feed'; state.panel = 'main';
+          if (state.pendingConnect && state.pendingConnect !== state.user.displayName) { state.tab = 'network'; state.panel = 'network'; state.addConnectionInput = state.pendingConnect; state.pendingConnect = null; }
           render();
         } else {
           errEl.textContent = 'Log in failed. If you just signed up, check your email to confirm.';
@@ -1871,6 +1903,19 @@
     function handleDeepLink() {
       const params = new URLSearchParams(location.search);
       const reviewId = params.get('review');
+      const connectName = params.get('connect');
+      if (connectName) {
+        const name = decodeURIComponent(connectName).trim();
+        if (name) state.pendingConnect = name;
+        const p = new URLSearchParams(location.search); p.delete('connect'); const q = p.toString() ? '?' + p.toString() : ''; if (history.replaceState) history.replaceState({}, '', location.pathname + q);
+      }
+      if (state.pendingConnect && state.user && state.pendingConnect !== state.user.displayName) {
+        state.tab = 'network';
+        state.panel = 'network';
+        state.addConnectionInput = state.pendingConnect;
+        state.pendingConnect = null;
+        render();
+      }
       if (reviewId && state.user) {
         const r = state.reviews.find(x => x.id === reviewId);
         if (r) {

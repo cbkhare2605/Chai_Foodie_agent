@@ -23,9 +23,11 @@ create policy "Users can insert own reviews" on reviews for insert with check (a
 create policy "Users can update own reviews" on reviews for update using (auth.uid() = user_id);
 create policy "Users can delete own reviews" on reviews for delete using (auth.uid() = user_id);
 
--- Connections: users can read connections involving them
-create policy "Users can view own connections" on connections for select using (
-  auth.uid() = user_a or auth.uid() = user_b
+-- Connections: authenticated users can read all connections (needed for 2nd-degree feed:
+-- Kalyani must see User-Vasudha connection to show Vasudha's reviews as "2nd connection")
+drop policy if exists "Users can view own connections" on connections;
+create policy "Users can view connections for feed" on connections for select using (
+  auth.role() = 'authenticated'
 );
 create policy "Users can insert connections" on connections for insert with check (
   auth.uid() = user_a or auth.uid() = user_b
