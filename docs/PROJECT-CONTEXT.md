@@ -66,6 +66,18 @@
 - **Where:** `docs/DEPLOYMENT-NEXT-STEPS.md`.
 - **Decisions / notes:** Repo root `vercel.json` serves from `foodie-website/pwa/public`. Run `cp foodie-website/foodie.html foodie-website/pwa/public/index.html` before deploy to sync latest changes.
 
+### 2025-02-15 — Database-backed demo preparation
+
+- **What:** Prepared for database deployment: Supabase schema, RLS, config, API layer (`foodie-api.js`), and async init in `foodie.html`. When `config.js` has Supabase URL + key, app loads from DB; otherwise uses localStorage.
+- **Where:** `foodie-website/supabase/`, `foodie-website/config.js`, `foodie-website/foodie-api.js`, `docs/DATABASE-DEMO-SETUP.md`.
+- **Decisions / notes:** Load path integrated. Auth UI and save mutations still need wiring. See `docs/DATABASE-DEMO-SETUP.md` for setup steps.
+
+### 2025-02-15 — Live version: Supabase Auth and save path
+
+- **What:** Wired Supabase Auth (signup/login) and full save path: reviews, comments, connections, saved, group lists, private notes, profile updates. Fixed loadData connections order bug. Profile save calls `updateProfile` when API enabled. Connection requests use client-generated id for accept flow.
+- **Where:** `foodie-website/foodie.html`, `foodie-website/foodie-api.js`, `docs/DATABASE-DEMO-SETUP.md`.
+- **Decisions / notes:** PWA synced via `./setup.sh`. Add Vercel URL to Supabase Auth redirect URLs for live deploy. See `docs/DATABASE-DEMO-SETUP.md` for deployment steps.
+
 ---
 
 ## Active areas and owners

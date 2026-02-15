@@ -49,7 +49,7 @@
     const profileById = {};
     (profilesRes.data || []).forEach(p => { profileById[p.id] = p; });
 
-    const reviews = (reviewsRes.data || []).map(r => ({
+    const allReviews = (reviewsRes.data || []).map(r => ({
       id: r.id,
       restaurant: r.restaurant,
       lat: r.lat,
@@ -67,6 +67,25 @@
       liked: false
     }));
 
+    const connections = {};
+    for (const c of (connRes.data || [])) {
+      const nameA = profileById[c.user_a]?.display_name;
+      const nameB = profileById[c.user_b]?.display_name;
+      if (nameA && nameB) {
+        if (!connections[nameA]) connections[nameA] = [];
+        if (!connections[nameA].includes(nameB)) connections[nameA].push(nameB);
+        if (!connections[nameB]) connections[nameB] = [];
+        if (!connections[nameB].includes(nameA)) connections[nameB].push(nameA);
+      }
+    }
+
+    const visibleNames = new Set([displayName]);
+    (connections[displayName] || []).forEach(c => { visibleNames.add(c); });
+    (connections[displayName] || []).forEach(friend => {
+      (connections[friend] || []).forEach(fof => visibleNames.add(fof));
+    });
+    const reviews = allReviews.filter(r => visibleNames.has(r.by));
+
     const comments = {};
     for (const c of (commentsRes.data || [])) {
       if (!comments[c.review_id]) comments[c.review_id] = [];
@@ -74,16 +93,6 @@
         by: profileById[c.user_id]?.display_name || 'Unknown',
         text: c.text
       });
-    }
-
-    const connections = {};
-    for (const c of (connRes.data || [])) {
-      const otherId = c.user_a === user.id ? c.user_b : c.user_a;
-      const otherName = profileById[otherId]?.display_name;
-      if (otherName) {
-        if (!connections[displayName]) connections[displayName] = [];
-        if (!connections[displayName].includes(otherName)) connections[displayName].push(otherName);
-      }
     }
 
     const connectionRequests = [];
@@ -129,10 +138,181 @@
     };
   }
 
+  async function signUp(email, password, displayName) {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { display_name: displayName } }
+    });
+    if (error) throw error;
+    if (data.user) {
+      await supabase.from('profiles').update({ display_name: displayName }).eq('id', data.user.id);
+    }
+    return data;
+  }
+
+  async function signIn(email, password) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data;
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut();
+  }
+
+  async function getUserIdByDisplayName(displayName) {
+    const { data } = await supabase.from('profiles').select('id').eq('display_name', displayName.trim()).single();
+    return data?.id;
+  }
+
+  async function saveReview(review) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const photos = (review.photos || []).filter(p => typeof p === 'string' && p.startsWith('data:image'));
+    await supabase.from('reviews').upsert({
+      id: review.id,
+      user_id: user.id,
+      restaurant: review.restaurant,
+      lat: review.lat,
+      lng: review.lng,
+      text: review.text,
+      rating: review.rating,
+      cuisine: review.cuisine || 'Various',
+      price: review.price || 2,
+      photos: photos,
+      verified_visit: !!review.verifiedVisit,
+      would_go_again: review.wouldGoAgain !== false,
+      likes: review.likes || 0,
+      created_at: review.date
+    }, { onConflict: 'id' });
+  }
+
+  async function deleteReview(id) {
+    await supabase.from('reviews').delete().eq('id', id);
+  }
+
+  async function addComment(reviewId, text) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('comments').insert({
+      id: 'c' + Date.now() + '-' + Math.random().toString(36).slice(2),
+      review_id: reviewId,
+      user_id: user.id,
+      text: text,
+      created_at: Date.now()
+    });
+  }
+
+  async function sendConnectionRequest(toDisplayName, reqId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const toId = await getUserIdByDisplayName(toDisplayName);
+    if (!toId || toId === user.id) return;
+    const id = reqId || 'req' + Date.now();
+    await supabase.from('connection_requests').insert({
+      id: id,
+      from_user: user.id,
+      to_user: toId,
+      status: 'pending',
+      created_at: Date.now()
+    });
+    await supabase.from('notifications').insert({
+      id: 'n' + Date.now(),
+      user_id: toId,
+      type: 'connection_request',
+      text: (await getProfileByUserId(user.id))?.display_name + ' wants to connect with you',
+      read: false,
+      created_at: Date.now()
+    });
+  }
+
+  async function acceptConnectionRequest(reqId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: req } = await supabase.from('connection_requests').select('*').eq('id', reqId).eq('to_user', user.id).single();
+    if (!req) return;
+    const ua = req.from_user < req.to_user ? req.from_user : req.to_user;
+    const ub = req.from_user < req.to_user ? req.to_user : req.from_user;
+    await supabase.from('connections').insert({ user_a: ua, user_b: ub });
+    await supabase.from('connection_requests').update({ status: 'accepted' }).eq('id', reqId);
+    await supabase.from('notifications').insert({
+      id: 'n' + Date.now(),
+      user_id: req.from_user,
+      type: 'connection',
+      text: 'You and ' + (await getProfileByUserId(user.id))?.display_name + ' are now connected.',
+      read: false,
+      created_at: Date.now()
+    });
+  }
+
+  async function ignoreConnectionRequest(reqId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('connection_requests').update({ status: 'ignored' }).eq('id', reqId).eq('to_user', user.id);
+  }
+
+  async function removeConnection(otherDisplayName) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const otherId = await getUserIdByDisplayName(otherDisplayName);
+    if (!otherId) return;
+    const ua = user.id < otherId ? user.id : otherId;
+    const ub = user.id < otherId ? otherId : user.id;
+    await supabase.from('connections').delete().eq('user_a', ua).eq('user_b', ub);
+  }
+
+  async function toggleSave(savedKey, add) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    if (add) {
+      await supabase.from('saved').upsert({ user_id: user.id, saved_key: savedKey }, { onConflict: 'user_id,saved_key' });
+    } else {
+      await supabase.from('saved').delete().eq('user_id', user.id).eq('saved_key', savedKey);
+    }
+  }
+
+  async function setPrivateNote(reviewId, note) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('private_notes').upsert({ user_id: user.id, review_id: reviewId, note: note || null }, { onConflict: 'user_id,review_id' });
+  }
+
+  async function toggleList(listName, savedKey, add) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    if (add) {
+      await supabase.from('group_list_items').upsert({ user_id: user.id, list_name: listName, saved_key: savedKey }, { onConflict: 'user_id,list_name,saved_key' });
+    } else {
+      await supabase.from('group_list_items').delete().eq('user_id', user.id).eq('list_name', listName).eq('saved_key', savedKey);
+    }
+  }
+
+  async function updateProfile(displayName, bio, avatarUrl) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('profiles').update({ display_name: displayName, bio: bio || null, avatar_url: avatarUrl || null, updated_at: new Date().toISOString() }).eq('id', user.id);
+  }
+
   window.FOODIE_API = {
     enabled: true,
     supabase,
     loadData,
-    getProfileByUserId
+    getProfileByUserId,
+    signUp,
+    signIn,
+    signOut,
+    getUserIdByDisplayName,
+    saveReview,
+    deleteReview,
+    addComment,
+    sendConnectionRequest,
+    acceptConnectionRequest,
+    ignoreConnectionRequest,
+    removeConnection,
+    toggleSave,
+    setPrivateNote,
+    toggleList,
+    updateProfile
   };
 })();

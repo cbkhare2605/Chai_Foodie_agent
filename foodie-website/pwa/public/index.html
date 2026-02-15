@@ -302,6 +302,7 @@
     }
 
     function saveToStorage() {
+      if (window.FOODIE_API?.enabled) return;
       try {
         if (state.user) localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(state.user));
         localStorage.setItem(STORAGE_KEYS.reviews, JSON.stringify(state.reviews));
@@ -490,7 +491,7 @@
     function getComments(reviewId) {
       return (state.comments[reviewId] || []).slice();
     }
-    function addComment(reviewId, text) {
+    async function addComment(reviewId, text) {
       const t = (text || '').trim().slice(0, MAX_COMMENT_TEXT);
       if (!t) return;
       if (!state.comments[reviewId]) state.comments[reviewId] = [];
@@ -499,7 +500,8 @@
       if (r && r.by !== state.user.displayName) {
         state.notifications.push({ id: Date.now().toString(), type: 'comment', text: `${state.user.displayName} commented on your review of ${r.restaurant}`, read: false, date: Date.now() });
       }
-      saveToStorage(); render();
+      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.addComment(reviewId, t); } catch (e) { console.warn(e); } } else saveToStorage();
+      render();
     }
 
     function shareReview(id) {
@@ -510,7 +512,7 @@
     function getSavedKey(r) { return (r.lat + ',' + r.lng + '|' + (r.restaurant||'')).slice(0,80); }
     function isSaved(r) { return state.saved.includes(getSavedKey(r)); }
     function getPrivateNote(reviewId) { return (state.privateNotes || {})[reviewId] || ''; }
-    function setPrivateNote(reviewId, text) { if (!state.privateNotes) state.privateNotes = {}; state.privateNotes[reviewId] = (text || '').trim(); saveToStorage(); render(); }
+    async function setPrivateNote(reviewId, text) { if (!state.privateNotes) state.privateNotes = {}; state.privateNotes[reviewId] = (text || '').trim(); if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.setPrivateNote(reviewId, (text || '').trim()); } catch (e) { console.warn(e); } } else saveToStorage(); render(); }
     function getReviewListNames(r) {
       const k = getSavedKey(r);
       const names = [];
@@ -518,11 +520,12 @@
       Object.keys(state.groupLists || {}).forEach(listName => { if ((state.groupLists[listName] || []).includes(k)) names.push(listName); });
       return names;
     }
-    function toggleSaveById(reviewId) {
+    async function toggleSaveById(reviewId) {
       const r = state.reviews.find(x => x.id === reviewId);
       if (!r) return;
       const k = getSavedKey(r);
       const i = state.saved.indexOf(k);
+      const add = i < 0;
       if (i >= 0) state.saved.splice(i, 1);
       else {
         state.saved.push(k);
@@ -533,31 +536,34 @@
           state.notifications.push({ id: Date.now().toString(), type: 'connection_reviewed_saved', text: `${names} reviewed ${r.restaurant} — you saved this place!`, read: false, date: Date.now() });
         }
       }
-      saveToStorage(); render();
+      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.toggleSave(k, add); } catch (e) { console.warn(e); } } else saveToStorage();
+      render();
     }
-    function addToList(reviewId, listName) {
+    async function addToList(reviewId, listName) {
       const r = state.reviews.find(x => x.id === reviewId);
       if (!r || !listName || listName === 'Saved') return;
       const k = getSavedKey(r);
       if (!state.groupLists[listName]) state.groupLists[listName] = [];
       if (!state.groupLists[listName].includes(k)) state.groupLists[listName].push(k);
-      saveToStorage(); render();
+      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.toggleList(listName, k, true); } catch (e) { console.warn(e); } } else saveToStorage();
+      render();
     }
-    function removeFromList(reviewId, listName) {
+    async function removeFromList(reviewId, listName) {
       const r = state.reviews.find(x => x.id === reviewId);
       if (!r) return;
       const k = getSavedKey(r);
       if (listName === 'Saved') { const i = state.saved.indexOf(k); if (i >= 0) state.saved.splice(i, 1); }
       else if (state.groupLists[listName]) { const arr = state.groupLists[listName]; const i = arr.indexOf(k); if (i >= 0) arr.splice(i, 1); }
-      saveToStorage(); render();
+      if (window.FOODIE_API?.enabled) { try { if (listName === 'Saved') await window.FOODIE_API.toggleSave(k, false); else await window.FOODIE_API.toggleList(listName, k, false); } catch (e) { console.warn(e); } } else saveToStorage();
+      render();
     }
-    function toggleList(reviewId, listName) {
+    async function toggleList(reviewId, listName) {
       const r = state.reviews.find(x => x.id === reviewId);
       if (!r || !listName) return;
       const k = getSavedKey(r);
       const inList = (state.groupLists[listName] || []).includes(k);
-      if (inList) removeFromList(reviewId, listName);
-      else addToList(reviewId, listName);
+      if (inList) await removeFromList(reviewId, listName);
+      else await addToList(reviewId, listName);
     }
     function toggleListDropdown(ev, btn) {
       if (ev) { ev.stopPropagation(); }
@@ -580,7 +586,7 @@
       setTab('map');
     }
 
-    function sendConnectionRequest(toName) {
+    async function sendConnectionRequest(toName) {
       if (!toName || !toName.trim()) return;
       const from = state.user.displayName;
       const to = toName.trim();
@@ -590,13 +596,15 @@
       const reqs = state.connectionRequests || [];
       if (reqs.some(r => r.from === from && r.to === to && r.status === 'pending')) return;
       if (reqs.some(r => r.from === to && r.to === from && r.status === 'pending')) return;
-      reqs.push({ id: Date.now().toString(), from, to, status: 'pending', date: Date.now() });
+      const reqId = Date.now().toString();
+      reqs.push({ id: reqId, from, to, status: 'pending', date: Date.now() });
       state.connectionRequests = reqs;
       state.notifications.push({ id: Date.now().toString(), type: 'request', text: `Connection request sent to ${to}. They'll need to approve.`, read: false, date: Date.now() });
       state.notifications.push({ id: Date.now().toString(), type: 'connection_request', text: `${from} wants to connect with you`, read: false, date: Date.now(), recipient: to });
-      saveToStorage(); render();
+      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.sendConnectionRequest(to, reqId); } catch (e) { console.warn(e); } } else saveToStorage();
+      render();
     }
-    function acceptConnectionRequest(reqId) {
+    async function acceptConnectionRequest(reqId) {
       const req = (state.connectionRequests || []).find(r => r.id === reqId && r.to === state.user.displayName && r.status === 'pending');
       if (!req) return;
       req.status = 'accepted';
@@ -606,18 +614,20 @@
       if (!state.connections[to]) state.connections[to] = [];
       if (!state.connections[to].includes(from)) state.connections[to].push(from);
       state.notifications.push({ id: Date.now().toString(), type: 'connection', text: `You and ${from} are now connected.`, read: false, date: Date.now() });
-      saveToStorage(); render();
+      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.acceptConnectionRequest(reqId); } catch (e) { console.warn(e); } } else saveToStorage();
+      render();
     }
-    function ignoreConnectionRequest(reqId) {
+    async function ignoreConnectionRequest(reqId) {
       const req = (state.connectionRequests || []).find(r => r.id === reqId && r.to === state.user.displayName);
-      if (req) { req.status = 'ignored'; saveToStorage(); render(); }
+      if (req) { req.status = 'ignored'; if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.ignoreConnectionRequest(reqId); } catch (e) { console.warn(e); } } else saveToStorage(); render(); }
     }
-    function removeConnection(name) {
+    async function removeConnection(name) {
       const uid = state.user.displayName;
       if (state.connections[uid]) {
         state.connections[uid] = state.connections[uid].filter(c => c !== name);
         if (state.connections[name]) state.connections[name] = state.connections[name].filter(c => c !== uid);
-        saveToStorage(); render();
+        if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.removeConnection(name); } catch (e) { console.warn(e); } } else saveToStorage();
+        render();
       }
     }
     function getPeopleYouCanAdd() {
@@ -759,7 +769,7 @@
       setTab('feed');
     }
 
-    function deleteReviewById(id) {
+    async function deleteReviewById(id) {
       const r = state.reviews.find(x => x.id === id);
       if (!r || r.by !== state.user?.displayName) return;
       if (!confirm('Delete this review? This cannot be undone.')) return;
@@ -776,7 +786,22 @@
       delete state.comments[id];
       delete state.privateNotes[id];
       if (state.viewRestaurant && state.viewRestaurant.name === r.restaurant) state.panel = 'main';
-      saveToStorage();
+      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.deleteReview(id); } catch (e) { console.warn(e); } } else saveToStorage();
+      render();
+    }
+
+    async function saveProfile() {
+      const old = state.user.displayName;
+      const newName = (document.getElementById('profileName')?.value || '').trim().slice(0, MAX_DISPLAY_NAME);
+      const bio = (document.getElementById('profileBio')?.value || '').slice(0, 500);
+      const p = state.profiles[newName || old] || state.profiles[old] || {};
+      p.bio = bio;
+      if (state.profiles[old]?.avatar) p.avatar = state.profiles[old].avatar;
+      state.user.displayName = newName || old;
+      state.profiles[state.user.displayName] = p;
+      if (old !== state.user.displayName) delete state.profiles[old];
+      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.updateProfile(state.user.displayName, bio, p.avatar); } catch (e) { console.warn(e); } } else saveToStorage();
+      state.panel = 'main';
       render();
     }
 
@@ -997,7 +1022,7 @@
           }
           const updated = { ...state.reviews[idx], text: text.trim(), rating: state.rating, restaurant: place.name, lat: place.lat, lng: place.lng, cuisine: state.addCuisine || 'Various', price: state.addPrice || 2, photos: (state.addPhotos || []).filter(isSafePhotoUrl), verifiedVisit: state.addVerifiedVisit, wouldGoAgain: state.addWouldGoAgain };
           state.reviews[idx] = updated;
-          saveToStorage();
+          if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.saveReview(updated); } catch (e) { console.warn(e); } } else saveToStorage();
         }
         cancelEdit();
         return;
@@ -1035,7 +1060,8 @@
       state.selectedPlace = null;
       state.editingReview = null;
       state.addCuisine = ''; state.addPrice = 2; state.addPhotos = []; state.addVerifiedVisit = false; state.addWouldGoAgain = true;
-      saveToStorage();
+      const newReview = state.reviews[0];
+      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.saveReview(newReview); } catch (e) { console.warn(e); } } else saveToStorage();
       setTab('feed');
     }
 
@@ -1232,7 +1258,28 @@
     function render() {
       const app = document.getElementById('app');
       if (!state.user) {
-        app.innerHTML = `
+        const useSupabase = window.FOODIE_API && window.FOODIE_API.enabled;
+        if (useSupabase) {
+          app.innerHTML = `
+          <div class="signup-page">
+            <div class="signup-top">
+              <img src="logo/Foodie_white.svg" alt="Foodie" class="signup-logo-img">
+            </div>
+            <div class="signup-bottom">
+              <div class="signup-actions">
+                <p class="signup-demo-label">Sign up or log in to see friends' reviews</p>
+                <input type="text" id="authDisplayName" placeholder="Display name" style="width:100%;max-width:320px;padding:14px;border:2px solid rgba(255,255,255,0.6);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:1rem" />
+                <input type="email" id="authEmail" placeholder="Email" style="width:100%;max-width:320px;padding:14px;border:2px solid rgba(255,255,255,0.6);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:1rem" />
+                <input type="password" id="authPassword" placeholder="Password (min 6 chars)" style="width:100%;max-width:320px;padding:14px;border:2px solid rgba(255,255,255,0.6);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:1rem" />
+                <div id="authError" style="color:#ff6b6b;font-size:0.9rem;min-height:20px"></div>
+                <button class="signup-btn" onclick="handleSupabaseSignUp()" style="font-size:1.1rem">Sign up</button>
+                <button class="signup-btn" onclick="handleSupabaseSignIn()" style="font-size:1.1rem;background:rgba(255,255,255,0.15)">Log in</button>
+              </div>
+            </div>
+          </div>
+        `;
+        } else {
+          app.innerHTML = `
           <div class="signup-page">
             <div class="signup-top">
               <img src="logo/Foodie_white.svg" alt="Foodie" class="signup-logo-img">
@@ -1259,6 +1306,7 @@
             </div>
           </div>
         `;
+        }
         return;
       }
 
@@ -1282,7 +1330,7 @@
           <input type="text" placeholder="Name" value="${(uid||'').replace(/"/g,'&quot;')}" id="profileName" maxlength="${MAX_DISPLAY_NAME}" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px">
           <textarea placeholder="Bio (optional)" id="profileBio" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px;min-height:80px;resize:vertical">${(prof.bio||'').replace(/</g,'&lt;')}</textarea>
           <div style="display:flex;gap:16px;margin-bottom:16px;color:#666;font-size:0.9rem"><span>📝 ${myReviews} reviews</span><span>🔖 ${state.saved.length} saved</span></div>
-          <button onclick="var old=state.user.displayName; var newName=(document.getElementById('profileName').value||'').trim().slice(0,${MAX_DISPLAY_NAME}); state.user.displayName=newName||old; var p=state.profiles[state.user.displayName]||state.profiles[old]||{}; p.bio=(document.getElementById('profileBio').value||'').slice(0,500); if(state.profiles[old]?.avatar) p.avatar=state.profiles[old].avatar; state.profiles[state.user.displayName]=p; if(old!==state.user.displayName) delete state.profiles[old]; saveToStorage(); state.panel='main'; render()" style="padding:12px 24px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">Save</button>
+          <button onclick="saveProfile()" style="padding:12px 24px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">Save</button>
           <button onclick="state.panel='main'; render()" style="padding:12px 24px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer;margin-left:8px">Cancel</button>
         </div></div>`;
       } else if (state.panel === 'saved') {
@@ -1585,7 +1633,42 @@
     let userLocationMarker = null;
 
     function login(name) { state.user = { displayName: name || 'Demo User' }; saveToStorage(); render(); }
-    function logout() {
+    async function handleSupabaseSignUp() {
+      const api = window.FOODIE_API;
+      if (!api?.enabled) return;
+      const name = (document.getElementById('authDisplayName')?.value || '').trim().slice(0, MAX_DISPLAY_NAME);
+      const email = (document.getElementById('authEmail')?.value || '').trim();
+      const password = (document.getElementById('authPassword')?.value || '');
+      const errEl = document.getElementById('authError');
+      if (!name || !email || !password) { if (errEl) errEl.textContent = 'Please fill in all fields'; return; }
+      if (password.length < 6) { if (errEl) errEl.textContent = 'Password must be at least 6 characters'; return; }
+      if (errEl) errEl.textContent = '';
+      try {
+        await api.signUp(email, password, name);
+        const stored = await api.loadData();
+        state.user = stored.user; state.reviews = stored.reviews; state.comments = stored.comments; state.connections = stored.connections; state.connectionRequests = stored.connectionRequests; state.saved = stored.saved; state.notifications = stored.notifications; state.profiles = stored.profiles; state.privateNotes = stored.privateNotes; state.groupLists = stored.groupLists; state.trustScores = stored.trustScores;
+        render();
+      } catch (e) { if (errEl) errEl.textContent = e.message || 'Sign up failed'; }
+    }
+    async function handleSupabaseSignIn() {
+      const api = window.FOODIE_API;
+      if (!api?.enabled) return;
+      const email = (document.getElementById('authEmail')?.value || '').trim();
+      const password = (document.getElementById('authPassword')?.value || '');
+      const errEl = document.getElementById('authError');
+      if (!email || !password) { if (errEl) errEl.textContent = 'Please enter email and password'; return; }
+      if (errEl) errEl.textContent = '';
+      try {
+        await api.signIn(email, password);
+        const stored = await api.loadData();
+        state.user = stored.user; state.reviews = stored.reviews; state.comments = stored.comments; state.connections = stored.connections; state.connectionRequests = stored.connectionRequests; state.saved = stored.saved; state.notifications = stored.notifications; state.profiles = stored.profiles; state.privateNotes = stored.privateNotes; state.groupLists = stored.groupLists; state.trustScores = stored.trustScores;
+        render();
+      } catch (e) { if (errEl) errEl.textContent = e.message || 'Log in failed'; }
+    }
+    async function logout() {
+      if (window.FOODIE_API?.enabled) {
+        await window.FOODIE_API.signOut();
+      }
       state.user = null;
       localStorage.removeItem(STORAGE_KEYS.user);
       render();
