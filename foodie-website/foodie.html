@@ -641,6 +641,27 @@
       setTab('feed');
     }
 
+    function deleteReviewById(id) {
+      const r = state.reviews.find(x => x.id === id);
+      if (!r || r.by !== state.user?.displayName) return;
+      if (!confirm('Delete this review? This cannot be undone.')) return;
+      const k = getSavedKey(r);
+      state.reviews = state.reviews.filter(x => x.id !== id);
+      const i = state.saved.indexOf(k);
+      if (i >= 0) state.saved.splice(i, 1);
+      GROUP_LIST_NAMES.forEach(listName => {
+        if (listName === 'Saved') return;
+        const arr = state.groupLists[listName] || [];
+        const j = arr.indexOf(k);
+        if (j >= 0) arr.splice(j, 1);
+      });
+      delete state.comments[id];
+      delete state.privateNotes[id];
+      if (state.viewRestaurant && state.viewRestaurant.name === r.restaurant) state.panel = 'main';
+      saveToStorage();
+      render();
+    }
+
     function handleProfilePhoto(input) {
       const f = input?.files?.[0];
       if (!f) return;
@@ -820,7 +841,7 @@
                 ${r.verifiedVisit ? `<span class="badge-verified" title="Verified visit">✓ Verified</span>` : ''}
                 ${r.wouldGoAgain ? `<span class="badge-again" title="Would go again">🔄 Again</span>` : ''}
                 ${trustScore !== null ? `<span class="badge-trust" title="Taste match">${trustScore}% match</span>` : ''}
-                ${isOwn ? `<button class="review-edit-btn" onclick="editReviewById('${r.id}')" title="Edit">✏️ Edit</button>` : ''}
+                ${isOwn ? `<button class="review-edit-btn" onclick="editReviewById('${r.id}')" title="Edit">✏️ Edit</button><button class="review-edit-btn" onclick="deleteReviewById('${r.id}')" title="Delete" style="color:#c62828">🗑️ Delete</button>` : ''}
               </div>
               <div class="review-date">${formatDate(r.date)}</div>
               <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${r.restaurant}">${(r.restaurant||'').substring(0,60)}${(r.restaurant||'').length>60?'...':''}</div>
@@ -838,7 +859,7 @@
             <button class="review-action-btn" onclick="document.getElementById('commentInput${r.id}')?.focus()" aria-label="Comment">💬 Comment ${comments.length?`(${comments.length})`:''}</button>
             <button class="review-action-btn" onclick="shareReview('${r.id}')" aria-label="Share">↗️ Share</button>
             <button class="review-action-btn" onclick="toggleSaveById('${r.id}')" aria-label="Save">${saved?'🔖':'📑'} ${saved?'Saved':'Save'}</button>
-            ${isOwn ? `<button class="review-action-btn" onclick="editReviewById('${r.id}')">✏️ Edit</button>` : ''}
+            ${isOwn ? `<button class="review-action-btn" onclick="editReviewById('${r.id}')">✏️ Edit</button><button class="review-action-btn" onclick="deleteReviewById('${r.id}')" style="color:#c62828" aria-label="Delete">🗑️ Delete</button>` : ''}
           </div>
           <div class="review-actions-secondary">
             <div class="review-list-dropdown">
