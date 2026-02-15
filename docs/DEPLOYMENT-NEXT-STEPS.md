@@ -36,10 +36,12 @@ This copies `foodie.html` → `pwa/public/index.html` and serves at http://local
 ```bash
 cd "/Users/chaitanyakhare/Cursor projects/Chai_Foodie_agent"
 
-# Sync PWA first (copy foodie.html → pwa/public/index.html)
+# Sync PWA (copy foodie.html and ensure config/api are in pwa/public)
 cp foodie-website/foodie.html foodie-website/pwa/public/index.html
+cp foodie-website/config.js foodie-website/pwa/public/
+cp foodie-website/foodie-api.js foodie-website/pwa/public/
 
-git add foodie-website/foodie.html foodie-website/pwa/public/index.html vercel.json
+git add foodie-website/foodie.html foodie-website/pwa/public/index.html foodie-website/pwa/public/config.js foodie-website/pwa/public/foodie-api.js vercel.json
 git add docs/DEPLOYMENT-SAFETY.md docs/SECURITY-STATUS.md docs/BACKEND-ROADMAP.md  # optional
 git status   # verify
 git commit -m "Deploy: camera capture, location-aware search, security updates"

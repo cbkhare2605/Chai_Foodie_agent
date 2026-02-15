@@ -72,6 +72,7 @@
     .connect-btn:hover { background: #0a66c2; color: white; }
     .connect-btn.pending { border-color: #999; color: #999; cursor: default; }
     .review-connection { font-size: 0.75rem; color: #666; background: #f3f2ef; padding: 1px 6px; border-radius: 4px; }
+    .review-connection.badge-discover { color: #7c4dff; background: #ede7f6; }
     .badge-verified { font-size: 0.7rem; color: #0a7; background: #e6f7f0; padding: 2px 6px; border-radius: 4px; }
     .badge-again { font-size: 0.7rem; color: #666; background: #f3f2ef; padding: 2px 6px; border-radius: 4px; }
     .badge-trust { font-size: 0.7rem; color: #0a66c2; background: #e8f4fc; padding: 2px 6px; border-radius: 4px; }
@@ -139,8 +140,9 @@
     .map-filters { display: flex; flex-direction: column; gap: 4px; }
     .filter-btn { display: flex; justify-content: space-between; padding: 14px 16px; font-size: 1rem; border: none; color: white; text-align: left; width: 100%; cursor: pointer; }
     .filter-btn:nth-child(1) { background: #e31919; }
-    .filter-btn:nth-child(2) { background: #006CE0; }
-    .filter-btn:nth-child(3) { background: #ff8d00; }
+    .filter-btn:nth-child(2) { background: #7c4dff; }
+    .filter-btn:nth-child(3) { background: #006CE0; }
+    .filter-btn:nth-child(4) { background: #ff8d00; }
     .filter-active { box-shadow: inset 0 0 0 3px white; }
     #map-container { height: 420px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; }
     .map-marker.leaflet-marker-icon { background: none !important; border: none !important; }
@@ -182,6 +184,7 @@
   </div>
   <script src="config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="seed-reviews.js"></script>
   <script src="foodie-api.js"></script>
   <script>
     function formatDate(ts) {
@@ -204,7 +207,7 @@
       profiles: 'foodie_profiles', privateNotes: 'foodie_private_notes',
       groupLists: 'foodie_group_lists', trustScores: 'foodie_trust_scores'
     };
-    const GROUP_LIST_NAMES = ['Saved', 'Date night', 'Family favorites', 'Work lunch', 'Quick bite'];
+    const GROUP_LIST_NAMES = ['Saved', 'Go-to spot', 'Date night', 'Family favorites', 'Work lunch', 'Quick bite'];
     const DEMO_USERS = ['Demo User', 'Kalyani', 'Yaugandha', 'Lavanya', 'Tom', 'Dick', 'Harry'];
     const CUISINES = ['Indian', 'Japanese', 'French', 'Italian', 'Mexican', 'American', 'Chinese', 'Korean', 'Thai', 'British', 'Nordic', 'Spanish', 'Peruvian', 'Australian', 'Various'];
     const PRICE_LABELS = ['$', '$$', '$$$', '$$$$'];
@@ -723,7 +726,8 @@
       return [];
     }
 
-    function getConnectionLabel(level) {
+    function getConnectionLabel(level, r) {
+      if (r?.seed) return 'Discover';
       if (level === 1) return '1st';
       if (level === 2) return '2nd';
       return 'You';
@@ -750,6 +754,7 @@
     }
     function getEffectiveLevel(r) {
       if (!r || !state.user) return 2;
+      if (r.seed) return 0;
       if (r.by === state.user.displayName) return 3;
       const myConns = state.connections[state.user.displayName] || [];
       if (myConns.includes(r.by)) return 1;
@@ -1091,7 +1096,8 @@
 
     function getMapRestaurants() {
       let list = state.reviews;
-      if (state.mapFilter === '1') list = list.filter(r => getEffectiveLevel(r) === 1);
+      if (state.mapFilter === '0') list = list.filter(r => r.seed);
+      else if (state.mapFilter === '1') list = list.filter(r => getEffectiveLevel(r) === 1);
       else if (state.mapFilter === '2') list = list.filter(r => getEffectiveLevel(r) === 2);
       if (state.mapCuisine) list = list.filter(r => (r.cuisine||'Various') === state.mapCuisine);
       if (state.mapPrice) list = list.filter(r => (r.price||2) <= parseInt(state.mapPrice));
@@ -1105,7 +1111,11 @@
           byLocation[k] = { name: r.restaurant, lat: r.lat, lng: r.lng, level: lvl, reviews: [], cuisines: new Set(), prices: [] };
         }
         const loc = byLocation[k];
-        if (lvl < (loc.level || 3)) loc.level = lvl;
+        if (lvl === 0) {
+          if (loc.level === undefined || loc.level === 0) loc.level = 0;
+        } else {
+          if (loc.level === undefined || loc.level === 0 || lvl < loc.level) loc.level = lvl;
+        }
         loc.reviews.push(r);
         if (r.cuisine) loc.cuisines.add(r.cuisine);
         if (r.price) loc.prices.push(r.price);
@@ -1169,8 +1179,8 @@
             <div class="review-header-meta">
               <div class="review-header-top">
                 <span class="review-by">${escapeHtml(r.by)}</span>
-                ${canConnectWith(r.by) ? (hasPendingRequestTo(r.by) ? `<button class="connect-btn pending" title="Request sent">+</button>` : `<button class="connect-btn" onclick="sendConnectionRequest('${(r.by||'').replace(/'/g,"\\'")}'); render()" title="Connect">+</button>`) : ''}
-                <span class="review-connection">${getConnectionLabel(effLevel)}</span>
+                ${canConnectWith(r.by) && !r.seed ? (hasPendingRequestTo(r.by) ? `<button class="connect-btn pending" title="Request sent">+</button>` : `<button class="connect-btn" onclick="sendConnectionRequest('${(r.by||'').replace(/'/g,"\\'")}'); render()" title="Connect">+</button>`) : ''}
+                <span class="review-connection${r.seed?' badge-discover':''}">${getConnectionLabel(effLevel, r)}</span>
                 ${r.verifiedVisit ? `<span class="badge-verified" title="Verified visit">✓ Verified</span>` : ''}
                 ${r.wouldGoAgain ? `<span class="badge-again" title="Would go again">🔄 Again</span>` : ''}
                 ${trustScore !== null ? `<span class="badge-trust" title="Taste match">${trustScore}% match</span>` : ''}
@@ -1212,13 +1222,13 @@
             <label style="font-size:0.8rem;color:#666">Private note (only you see):</label>
             <input type="text" value="${(privateNote||'').replace(/"/g,'&quot;')}" placeholder="e.g. Try the lamb biryani" onchange="setPrivateNote('${r.id}',this.value)" style="width:100%;padding:8px;margin-top:4px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem">
           </div>` : ''}
-          ${comments.length ? `<div class="review-comments">${comments.map(c=>`<div class="comment-item" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><strong>${escapeHtml(c.by)}:</strong>${canConnectWith(c.by) ? (hasPendingRequestTo(c.by) ? `<button class="connect-btn pending" title="Request sent">+</button>` : `<button class="connect-btn" onclick="sendConnectionRequest('${(c.by||'').replace(/'/g,"\\'")}'); render()" title="Connect">+</button>`) : ''}<span>${escapeHtml(c.text)}</span></div>`).join('')}</div>` : ''}
-          <div class="review-comments">
+          ${comments.length ? `<div class="review-comments">${comments.map(c=>`<div class="comment-item" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><strong>${escapeHtml(c.by)}:</strong>${canConnectWith(c.by) && !r.seed ? (hasPendingRequestTo(c.by) ? `<button class="connect-btn pending" title="Request sent">+</button>` : `<button class="connect-btn" onclick="sendConnectionRequest('${(c.by||'').replace(/'/g,"\\'")}'); render()" title="Connect">+</button>`) : ''}<span>${escapeHtml(c.text)}</span></div>`).join('')}</div>` : ''}
+          ${!r.seed ? `<div class="review-comments">
             <div class="comment-form">
               <input type="text" id="commentInput${r.id}" placeholder="Write a comment..." onkeydown="if(event.key==='Enter')addComment('${r.id}',this.value)&&(this.value='')">
               <button onclick="var i=document.getElementById('commentInput${r.id}'); addComment('${r.id}',i.value); i.value=''">Post</button>
             </div>
-          </div>
+          </div>` : ''}
           ${(r.likes||0) > 0 ? `<div style="padding: 0 16px 4px 76px; font-size: 0.8rem; color: #666;">${r.likes} ${r.likes===1?'like':'likes'}</div>` : ''}
         </div>
       `;
@@ -1566,6 +1576,7 @@
             </div>
             <div class="map-filters">
               <button class="filter-btn ${state.mapFilter==='all'?'filter-active':''}" onclick="filterMap('all')">📍 Total (${total})</button>
+              <button class="filter-btn ${state.mapFilter==='0'?'filter-active':''}" onclick="filterMap('0')">📍 Discover (${state.reviews.filter(r=>r.seed).length})</button>
               <button class="filter-btn ${state.mapFilter==='1'?'filter-active':''}" onclick="filterMap('1')">📍 1st Level (${l1})</button>
               <button class="filter-btn ${state.mapFilter==='2'?'filter-active':''}" onclick="filterMap('2')">📍 2nd Level (${l2})</button>
             </div>
@@ -1589,6 +1600,7 @@
               </div>
             </div>
             <div class="map-legend">
+              <span><span class="map-legend-dot" style="background:#7c4dff"></span> Discover</span>
               <span><span class="map-legend-dot" style="background:#006CE0"></span> 1st level</span>
               <span><span class="map-legend-dot" style="background:#FF8D00"></span> 2nd level</span>
               <span><span class="map-legend-dot" style="background:#e31919"></span> Your review</span>
@@ -1740,9 +1752,10 @@
       const center = toShow.length ? [toShow[0].lat, toShow[0].lng] : [37.37, -122.03];
       map = L.map('map-container').setView(center, 10);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
-      const levelColors = { 1: '#006CE0', 2: '#FF8D00', 3: '#e31919' };
+      const levelColors = { 0: '#7c4dff', 1: '#006CE0', 2: '#FF8D00', 3: '#e31919' };
       function buildMapPopup(r) {
-        const color = levelColors[r.level] || levelColors[2];
+        const color = levelColors[r.level] ?? levelColors[2];
+        const levelLabel = r.level === 0 ? 'Discover' : r.level === 1 ? '1st level' : r.level === 2 ? '2nd level' : 'Your review';
         const firstPhoto = (r.reviews || []).flatMap(rev => getReviewPhotoUrls(rev)).find(Boolean);
         const cuisineStr = (r.cuisines && r.cuisines.length) ? r.cuisines.join(', ') : 'Various';
         const priceStr = PRICE_LABELS[(r.price||2)-1] || '$$';
@@ -1750,7 +1763,7 @@
         return '<div class="map-popup" style="min-width:180px;max-width:260px">' +
           (firstPhoto ? '<img src="' + firstPhoto + '" alt="" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:6px" onerror="this.style.display=\'none\'">' : '') +
           '<strong>' + escapeHtml(r.name||'') + '</strong><br>' +
-          '<span style="color:' + color + '">● ' + (r.level===1?'1st level':r.level===2?'2nd level':'Your review') + '</span><br>' +
+          '<span style="color:' + color + '">● ' + levelLabel + '</span><br>' +
           '<span style="font-size:0.85rem;color:#666">' + cuisineStr + ' · ' + priceStr + '</span><br>' +
           '<span style="font-size:0.85rem">' + (r.avgRating !== '-' ? r.avgRating + ' ★' : '-') + ' · ' + (r.reviews?.length||0) + ' review' + ((r.reviews?.length||0)===1?'':'s') + '</span><br>' +
           '<a href="' + dirUrl + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#0a66c2;color:white;border-radius:6px;text-decoration:none;font-size:0.9rem">Get directions</a> ' +

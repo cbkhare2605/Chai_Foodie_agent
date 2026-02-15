@@ -78,6 +78,12 @@
 - **Where:** `foodie-website/foodie.html`, `foodie-website/foodie-api.js`, `docs/DATABASE-DEMO-SETUP.md`.
 - **Decisions / notes:** PWA synced via `./setup.sh`. Add Vercel URL to Supabase Auth redirect URLs for live deploy. See `docs/DATABASE-DEMO-SETUP.md` for deployment steps.
 
+### 2025-02-15 — Live deployment confirmed
+
+- **What:** Foodie site is live. User can create login (Supabase Auth) on the deployed app. Created `docs/PROJECT-SERVICES.md` to track external services (Supabase, Vercel, GitHub) where project has accounts—no passwords stored, credentials in password manager.
+- **Where:** `docs/PROJECT-SERVICES.md`, `docs/PROJECT-CONTEXT.md`.
+- **Decisions / notes:** Add your Vercel live URL to `docs/PROJECT-SERVICES.md` when you have it.
+
 ---
 
 ## Active areas and owners

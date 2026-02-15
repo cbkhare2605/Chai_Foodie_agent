@@ -8,7 +8,8 @@ echo "→ Syncing PWA files..."
 cp foodie.html pwa/public/index.html
 cp config.js pwa/public/
 cp foodie-api.js pwa/public/
-echo "✓ Done. index.html, config.js, foodie-api.js copied to pwa/public/"
+cp seed-reviews.js pwa/public/
+echo "✓ Done. index.html, config.js, foodie-api.js, seed-reviews.js copied to pwa/public/"
 
 if [ "$1" = "run" ] || [ "$1" = "serve" ]; then
   echo ""

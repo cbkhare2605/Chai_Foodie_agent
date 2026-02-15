@@ -88,7 +88,12 @@
     (connections[displayName] || []).forEach(friend => {
       (connections[friend] || []).forEach(fof => visibleNames.add(fof));
     });
-    const reviews = allReviews.filter(r => visibleNames.has(r.by));
+    let reviews = allReviews.filter(r => visibleNames.has(r.by));
+
+    if (reviews.length < 15 && window.FOODIE_SEED_REVIEWS?.length) {
+      const seed = window.FOODIE_SEED_REVIEWS.map(r => ({ ...r, date: r.date || Date.now() - 86400000 }));
+      reviews = [...reviews, ...seed].sort((a, b) => (b.date || 0) - (a.date || 0));
+    }
 
     const comments = {};
     for (const c of (commentsRes.data || [])) {
