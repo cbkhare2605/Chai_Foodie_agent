@@ -805,6 +805,25 @@
       }));
     }
 
+    function getRestaurantNetworkScore(lat, lng) {
+      const atLoc = state.reviews.filter(r =>
+        Math.abs(r.lat - lat) < 0.01 && Math.abs(r.lng - lng) < 0.01 &&
+        (getEffectiveLevel(r) === 1 || getEffectiveLevel(r) === 2 || getEffectiveLevel(r) === 3)
+      );
+      if (!atLoc.length) return null;
+      const avg = atLoc.reduce((s, r) => s + (r.rating || 0), 0) / atLoc.length;
+      return { avgRating: avg.toFixed(1), count: atLoc.length };
+    }
+
+    function getMapBubbleSize(avgRating, reviewCount) {
+      const avg = parseFloat(avgRating) || 3;
+      const count = Math.min(reviewCount || 1, 5);
+      const quality = Math.max(0, (avg - 2) / 3);
+      const volume = 0.5 + 0.5 * (count / 5);
+      const size = Math.round(18 + 14 * quality * volume);
+      return Math.max(16, Math.min(36, size));
+    }
+
     function getFilteredReviews() {
       let list = state.reviews;
       if (state.panel === 'myreviews') list = list.filter(r => r.by === state.user?.displayName);
@@ -828,6 +847,7 @@
       const saved = isSaved(r);
       const mutualCount = getMutualConnectionsCount(r);
       const trustScore = !isOwn && (effLevel === 1 || effLevel === 2) ? getTrustScore(r.by) : null;
+      const networkScore = getRestaurantNetworkScore(r.lat, r.lng);
       const privateNote = isOwn ? getPrivateNote(r.id) : '';
       return `
         <div class="review-card" data-review-id="${r.id}">
@@ -846,6 +866,7 @@
               <div class="review-date">${formatDate(r.date)}</div>
               <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${r.restaurant}">${(r.restaurant||'').substring(0,60)}${(r.restaurant||'').length>60?'...':''}</div>
               ${mutualCount > 0 ? `<div class="mutual-connections">${mutualCount} ${mutualCount===1?'friend':'friends'} also reviewed this</div>` : ''}
+              ${networkScore && networkScore.count > 0 ? `<div class="network-score" style="font-size:0.8rem;color:#333;margin-top:4px;font-weight:500">Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</div>` : ''}
               ${(r.cuisine||r.price) ? `<div style="font-size:0.75rem;color:#666;margin-top:2px">${r.cuisine||''} ${PRICE_LABELS[(r.price||2)-1]||''}</div>` : ''}
             </div>
           </div>
@@ -1103,14 +1124,14 @@
       } else if (state.panel === 'restaurant' && state.viewRestaurant) {
         const vr = state.viewRestaurant;
         const restReviews = state.reviews.filter(r => Math.abs(r.lat - vr.lat) < 0.01 && Math.abs(r.lng - vr.lng) < 0.01);
-        const avgRating = restReviews.length ? (restReviews.reduce((s,r)=>s+(r.rating||0),0) / restReviews.length).toFixed(1) : '-';
+        const networkScore = getRestaurantNetworkScore(vr.lat, vr.lng);
         const cuisines = [...new Set(restReviews.map(r=>r.cuisine||'Various'))];
         mainContent = `<div class="main">
           <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; state.viewRestaurant=null; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
           <div style="padding:20px;background:white;border-radius:12px;margin-bottom:16px">
             <h1 style="font-size:1.5rem;margin-bottom:8px">${vr.name}</h1>
             <div style="display:flex;gap:16px;flex-wrap:wrap;color:#666;font-size:0.95rem">
-              <span>❤️ ${avgRating} (${restReviews.length} reviews)</span>
+              ${networkScore ? `<span style="font-weight:500;color:#333">Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</span>` : ''}
               ${cuisines.length ? `<span>${cuisines.join(', ')}</span>` : ''}
             </div>
             <a href="https://www.google.com/maps?q=${vr.lat},${vr.lng}" target="_blank" rel="noopener" style="display:inline-block;margin-top:12px;color:#0a66c2;font-size:0.9rem">📍 Get directions</a>
@@ -1339,11 +1360,12 @@
         markerCluster = L.markerClusterGroup();
         toShow.forEach(r => {
           const color = levelColors[r.level] || levelColors[2];
+          const size = getMapBubbleSize(r.avgRating, r.reviews?.length || 0);
           const icon = L.divIcon({
             className: 'map-marker',
-            html: `<div style="background:${color};width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3)"></div>`,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12]
+            html: `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3)"></div>`,
+            iconSize: [size, size],
+            iconAnchor: [size/2, size/2]
           });
           const m = L.marker([r.lat, r.lng], { icon }).bindPopup(buildMapPopup(r));
           markerCluster.addLayer(m);
@@ -1353,11 +1375,12 @@
       } else {
         toShow.forEach(r => {
           const color = levelColors[r.level] || levelColors[2];
+          const size = getMapBubbleSize(r.avgRating, r.reviews?.length || 0);
           const icon = L.divIcon({
             className: 'map-marker',
-            html: `<div style="background:${color};width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3)"></div>`,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12]
+            html: `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3)"></div>`,
+            iconSize: [size, size],
+            iconAnchor: [size/2, size/2]
           });
           const m = L.marker([r.lat, r.lng], { icon }).addTo(map).bindPopup(buildMapPopup(r));
           markers.push(m);
