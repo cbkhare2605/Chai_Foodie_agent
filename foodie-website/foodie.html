@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#e31919">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Foodie">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <title>Foodie - Trusted Restaurant Reviews</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #eee; min-height: 100vh; }
+    
+    .top-bar { position: fixed; top: 0; left: 0; right: 0; background: #e31919; color: white; z-index: 90; }
+    .header { padding: 12px 16px; display: flex; align-items: center; gap: 16px; }
+    .menu-btn { background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 4px 8px; }
+    .menu-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; }
+    .menu-sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 280px; max-width: 85vw; background: #0049AD; z-index: 101; padding-top: 20px; }
+    .menu-sidebar-header { text-align: center; padding: 24px 16px; background: #003c90; }
+    .menu-sidebar-avatar { width: 80px; height: 80px; border-radius: 50%; background: #4b8ce6; color: white; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 600; margin: 0 auto 12px; }
+    .menu-sidebar-name { color: #ffac46; font-size: 1.3rem; font-weight: 500; }
+    .menu-sidebar-nav { padding: 16px 0; }
+    .menu-sidebar-item { display: block; width: 100%; padding: 14px 20px; text-align: left; border: none; background: none; color: white; font-size: 1.1rem; cursor: pointer; }
+    .menu-sidebar-item:hover { background: rgba(255,255,255,0.1); }
+    .logo { font-size: 1.4rem; font-weight: 600; }
+    
+    .signup-page { min-height: 100vh; display: flex; flex-direction: column; }
+    .signup-top { width: 100%; min-height: 40vh; background-color: #9e1212; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
+    .signup-logo-img { width: 200px; max-width: 80%; height: auto; }
+    .signup-bottom { flex: 1; width: 100%; background-color: #014288; padding: 45px 24px 60px; display: flex; flex-direction: column; align-items: center; }
+    .signup-actions { width: 100%; max-width: 320px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .signup-btn { width: 100%; padding: 16px; font-size: 1.1rem; font-weight: 600; background: transparent; color: white; border: 2px solid white; border-radius: 28px; cursor: pointer; }
+    .signup-btn:hover { background: rgba(255,255,255,0.2); }
+    .signup-demo-label { color: rgba(255,255,255,0.85); font-size: 0.95rem; margin-bottom: 8px; text-align: center; }
+    .signup-bottom input::placeholder, .signup-bottom input::-webkit-input-placeholder { color: rgba(255,255,255,0.6); }
+    .signup-bottom select option { background: #014288; color: white; }
+    
+    .tabs { display: flex; justify-content: space-around; padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.3); }
+    .tab { display: flex; flex-direction: column; align-items: center; padding: 8px 16px; color: rgba(255,255,255,0.7); cursor: pointer; border: none; background: none; font-size: 0.75rem; }
+    .tab:hover, .tab.active { color: white; }
+    .tab.active { background: rgba(255,255,255,0.2); border-radius: 8px; }
+    
+    .app-content { padding-top: 120px; min-height: 100vh; display: flex; gap: 0; }
+    .app-content-inner { flex: 1; min-width: 0; display: flex; justify-content: center; }
+    .main { padding: 16px; max-width: 600px; width: 100%; }
+    .ad-strip { width: 300px; flex-shrink: 0; padding: 16px; background: #f5f5f5; border-left: 1px solid #ddd; min-height: calc(100vh - 120px); }
+    .ad-slot { background: white; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); text-align: center; min-height: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .ad-slot-label { font-size: 0.7rem; color: #999; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .ad-slot-placeholder { color: #bbb; font-size: 0.9rem; }
+    @media (max-width: 900px) { .ad-strip { display: none; } }
+    
+    .feed-compose { background: white; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 12px; cursor: pointer; }
+    .feed-compose:hover { background: #f8f8f8; }
+    .feed-compose-avatar { width: 48px; height: 48px; border-radius: 50%; background: #e31919; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 1.1rem; flex-shrink: 0; }
+    .feed-compose-text { flex: 1; color: #666; font-size: 0.95rem; }
+    
+    .review-card { background: white; border-radius: 8px; overflow: visible; box-shadow: 0 1px 2px rgba(0,0,0,0.08); margin-bottom: 12px; }
+    .review-card-header { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; overflow: visible; border-radius: 8px 8px 0 0; }
+    .review-avatar { width: 48px; height: 48px; border-radius: 50%; background: #0a66c2; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 1rem; flex-shrink: 0; }
+    .review-avatar.self { background: #e31919; }
+    .review-header-meta { flex: 1; min-width: 0; overflow: visible; }
+    .review-header-top { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+    .review-header-top > * { flex-shrink: 0; }
+    .review-edit-btn { margin-left: auto; background: #e31919; color: white; border: none; font-size: 0.85rem; cursor: pointer; padding: 6px 12px; border-radius: 6px; }
+    .review-edit-btn:hover { background: #c61616; }
+    .review-by { font-weight: 600; color: #000; font-size: 0.95rem; }
+    .connect-btn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #0a66c2; background: white; color: #0a66c2; font-size: 1rem; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .connect-btn:hover { background: #0a66c2; color: white; }
+    .connect-btn.pending { border-color: #999; color: #999; cursor: default; }
+    .review-connection { font-size: 0.75rem; color: #666; background: #f3f2ef; padding: 1px 6px; border-radius: 4px; }
+    .badge-verified { font-size: 0.7rem; color: #0a7; background: #e6f7f0; padding: 2px 6px; border-radius: 4px; }
+    .badge-again { font-size: 0.7rem; color: #666; background: #f3f2ef; padding: 2px 6px; border-radius: 4px; }
+    .badge-trust { font-size: 0.7rem; color: #0a66c2; background: #e8f4fc; padding: 2px 6px; border-radius: 4px; }
+    .mutual-connections { font-size: 0.8rem; color: #0a66c2; margin-top: 4px; }
+    .review-date { font-size: 0.8rem; color: #666; margin-top: 2px; }
+    .review-restaurant { font-weight: 600; color: #e31919; font-size: 1rem; margin-top: 4px; }
+    .review-card-body { padding: 0 16px 12px 76px; }
+    .review-text { line-height: 1.5; font-size: 0.95rem; color: #333; }
+    .review-rating { margin-top: 6px; font-size: 1rem; }
+    .review-actions { display: flex; align-items: center; padding: 4px 16px 4px 76px; border-top: 1px solid #f3f2ef; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; gap: 0; -webkit-tap-highlight-color: transparent; }
+    .review-actions-secondary { display: flex; align-items: center; padding: 4px 16px 8px 76px; gap: 12px; flex-wrap: wrap; }
+    .review-actions-secondary .review-list-dropdown { position: relative; display: inline-block; }
+    .review-action-btn { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 8px 10px; background: none; border: none; color: #666; font-size: 0.8rem; cursor: pointer; white-space: nowrap; touch-action: manipulation; -webkit-tap-highlight-color: rgba(0,0,0,0.08); }
+    .review-action-btn:hover { background: #f3f2ef; color: #0a66c2; }
+    .review-action-btn.liked { color: #e31919; }
+    
+    .add-review-page { display: flex; flex-direction: column; gap: 16px; }
+    .add-review-page { position: relative; }
+    .add-review-input { width: 100%; padding: 14px; font-size: 1rem; border: none; border-radius: 8px; }
+    .search-results { position: absolute; top: 100%; left: 0; right: 0; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 200px; overflow-y: auto; z-index: 20; margin-top: 4px; }
+    .search-result-item { padding: 12px 14px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 0.95rem; }
+    .search-result-item:last-child { border-bottom: none; }
+    .search-result-item:hover { background: #f5f5f5; }
+    .add-review-rating { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: #ff8d00; color: white; border-radius: 8px; }
+    .rating-hearts { display: flex; gap: 8px; }
+    .heart { background: none; border: none; font-size: 1.8rem; cursor: pointer; opacity: 0.4; }
+    .heart.active { opacity: 1; }
+    .add-review-textarea { width: 100%; padding: 14px; font-size: 1rem; border: none; border-radius: 8px; min-height: 120px; resize: vertical; }
+    .add-review-submit { padding: 16px; font-size: 1.2rem; font-weight: 600; background: white; color: #014288; border: 2px solid white; border-radius: 28px; cursor: pointer; }
+    .add-review-cancel { margin-top: 12px; padding: 14px 24px; font-size: 1rem; background: transparent; color: white; border: 2px solid white; border-radius: 28px; cursor: pointer; width: 100%; }
+    .add-review-meta { display: flex; gap: 12px; margin-bottom: 12px; }
+    .add-review-photos { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .photo-upload-btn { padding: 10px 16px; background: #f3f2ef; border-radius: 8px; cursor: pointer; font-size: 0.95rem; }
+    .photo-preview { position: relative; }
+    .photo-preview img { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; }
+    .photo-preview button { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: #e31919; color: white; border: none; cursor: pointer; font-size: 14px; line-height: 1; }
+    .review-photos { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .review-photos img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; }
+    .review-comments { padding: 8px 16px 12px 76px; border-top: 1px solid #f3f2ef; }
+    .comment-item { font-size: 0.9rem; margin-bottom: 6px; }
+    .comment-item strong { margin-right: 6px; }
+    .comment-form { display: flex; gap: 8px; margin-top: 8px; }
+    .comment-form input { flex: 1; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.9rem; }
+    .comment-form button { padding: 8px 16px; background: #0a66c2; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
+    
+    .map-filters { display: flex; flex-direction: column; gap: 4px; }
+    .filter-btn { display: flex; justify-content: space-between; padding: 14px 16px; font-size: 1rem; border: none; color: white; text-align: left; width: 100%; cursor: pointer; }
+    .filter-btn:nth-child(1) { background: #e31919; }
+    .filter-btn:nth-child(2) { background: #006CE0; }
+    .filter-btn:nth-child(3) { background: #ff8d00; }
+    .filter-active { box-shadow: inset 0 0 0 3px white; }
+    #map-container { height: 350px; width: 100%; border-radius: 12px; overflow: hidden; }
+    .map-marker.leaflet-marker-icon { background: none !important; border: none !important; }
+    .map-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem; color: #666; flex-wrap: wrap; }
+    .map-legend-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    
+    .feed-search, .map-search { margin-bottom: 12px; }
+    .feed-search input, .map-search input { width: 100%; padding: 12px 16px; font-size: 1rem; border: none; border-radius: 8px; }
+    .feed-filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    
+    .list-trigger-btn { min-width: 44px; min-height: 44px; }
+    .list-dropdown-menu { transition: transform 0.2s ease; }
+    @media (max-width: 600px) {
+      .list-dropdown-menu.show-mobile { position: fixed !important; left: 0 !important; right: 0 !important; bottom: 0 !important; top: auto !important; margin: 0 !important; max-height: 55vh !important; border-radius: 16px 16px 0 0 !important; z-index: 200 !important; padding-bottom: env(safe-area-inset-bottom, 0) !important; }
+      .list-dropdown-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 199; }
+    }
+    .hidden { display: none !important; }
+    .skip-link { position: absolute; top: -40px; left: 0; background: #e31919; color: white; padding: 8px 16px; z-index: 200; }
+    .skip-link:focus { top: 0; }
+    button:focus, input:focus, select:focus, textarea:focus { outline: 2px solid #e31919; outline-offset: 2px; }
+  </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" crossorigin="">
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to main content</a>
+  <div id="app" role="application" aria-label="Foodie app"></div>
+  <script>
+    function formatDate(ts) {
+      const sec = (Date.now() - ts) / 1000, m = sec/60, h = m/60, d = h/24;
+      if (sec < 45) return 'less than a minute ago';
+      if (sec < 90) return 'about a minute ago';
+      if (m < 45) return `about ${Math.round(m)} minutes ago`;
+      if (m < 90) return 'about an hour ago';
+      if (h < 24) return `about ${Math.round(h)} hours ago`;
+      if (h < 42) return 'a day ago';
+      if (d < 30) return `${Math.round(d)} days ago`;
+      if (d < 45) return 'about a month ago';
+      return `${Math.round(d/30)} months ago`;
+    }
+
+    const STORAGE_KEYS = {
+      user: 'foodie_user', reviews: 'foodie_reviews', comments: 'foodie_comments',
+      connections: 'foodie_connections', connectionRequests: 'foodie_connection_requests',
+      saved: 'foodie_saved', notifications: 'foodie_notifications',
+      profiles: 'foodie_profiles', privateNotes: 'foodie_private_notes',
+      groupLists: 'foodie_group_lists', trustScores: 'foodie_trust_scores'
+    };
+    const GROUP_LIST_NAMES = ['Saved', 'Date night', 'Family favorites', 'Work lunch', 'Quick bite'];
+    const DEMO_USERS = ['Demo User', 'Kalyani', 'Yaugandha', 'Lavanya', 'Tom', 'Dick', 'Harry'];
+    const CUISINES = ['Indian', 'Japanese', 'French', 'Italian', 'Mexican', 'American', 'Chinese', 'Korean', 'Thai', 'British', 'Nordic', 'Spanish', 'Peruvian', 'Australian', 'Various'];
+    const PRICE_LABELS = ['$', '$$', '$$$', '$$$$'];
+    const PHOTOS_BASE = 'photos/';
+    const DEFAULT_REVIEWS = [
+      { id: 'k1', restaurant: 'Paradise Biryani, Pune', lat: 18.52, lng: 73.85, by: 'Kalyani', text: 'Amazing biryani! Authentic Hyderabad style.', rating: 5, date: Date.now() - 86400000*2, level: 1, likes: 4, liked: false, cuisine: 'Indian', price: 2, photoFile: 'photo1.jpg', verifiedVisit: true, wouldGoAgain: true },
+      { id: 'k2', restaurant: 'The Ivy, London', lat: 51.51, lng: -0.14, by: 'Kalyani', text: 'Classic British dining. The shepherd\'s pie is divine.', rating: 5, date: Date.now() - 86400000*5, level: 1, likes: 2, liked: false, cuisine: 'British', price: 4, photoFile: 'photo2.jpg' },
+      { id: 'k3', restaurant: 'Sukiyabashi Jiro, Tokyo', lat: 35.66, lng: 139.73, by: 'Kalyani', text: 'Once in a lifetime sushi experience. Worth the wait.', rating: 5, date: Date.now() - 86400000*12, level: 2, likes: 8, liked: false, cuisine: 'Japanese', price: 4, photoFile: 'photo3.jpg' },
+      { id: 'k4', restaurant: 'Café de Flore, Paris', lat: 48.85, lng: 2.33, by: 'Kalyani', text: 'Historic café with perfect croissants and people-watching.', rating: 4, date: Date.now() - 86400000*8, level: 1, likes: 3, liked: false },
+      { id: 'k5', restaurant: 'Katz\'s Delicatessen, NYC', lat: 40.73, lng: -73.99, by: 'Kalyani', text: 'Best pastrami sandwich in the world. Huge portions!', rating: 5, date: Date.now() - 86400000*15, level: 2, likes: 5, liked: false },
+      { id: 'k6', restaurant: 'Noma, Copenhagen', lat: 55.68, lng: 12.60, by: 'Kalyani', text: 'Innovative Nordic cuisine. Every course was a surprise.', rating: 5, date: Date.now() - 86400000*20, level: 1, likes: 6, liked: false },
+      { id: 'k7', restaurant: 'El Celler de Can Roca, Girona', lat: 41.98, lng: 2.82, by: 'Kalyani', text: 'Molecular gastronomy at its finest. 14 courses of wonder.', rating: 5, date: Date.now() - 86400000*25, level: 2, likes: 2, liked: false },
+      { id: 'k8', restaurant: 'Hawker Chan, Singapore', lat: 1.31, lng: 103.86, by: 'Kalyani', text: 'Michelin-starred chicken rice for under $5. Incredible.', rating: 5, date: Date.now() - 86400000*30, level: 1, likes: 7, liked: false },
+      { id: 'k9', restaurant: 'Quay, Sydney', lat: -33.86, lng: 151.21, by: 'Kalyani', text: 'Stunning harbour views. The snow egg dessert is legendary.', rating: 5, date: Date.now() - 86400000*40, level: 2, likes: 4, liked: false },
+      { id: 'k10', restaurant: 'Zuma, Dubai', lat: 25.08, lng: 55.14, by: 'Kalyani', text: 'Japanese izakaya in the desert. Great robata grill.', rating: 4, date: Date.now() - 86400000*45, level: 1, likes: 3, liked: false },
+      { id: 'y1', restaurant: 'Saravana Bhavan, Chennai', lat: 13.08, lng: 80.27, by: 'Yaugandha', text: 'Best South Indian breakfast. Idlis are pillow-soft.', rating: 5, date: Date.now() - 86400000*1, level: 2, likes: 2, liked: false },
+      { id: 'y2', restaurant: 'Dishoom, London', lat: 51.52, lng: -0.11, by: 'Yaugandha', text: 'Indian comfort food done right. Bacon naan is a must.', rating: 5, date: Date.now() - 86400000*4, level: 1, likes: 5, liked: false, photoFile: 'photo4.jpg', verifiedVisit: true, wouldGoAgain: true },
+      { id: 'y3', restaurant: 'Osteria Francescana, Modena', lat: 44.65, lng: 10.93, by: 'Yaugandha', text: 'Bottura\'s genius. The famous pasta dish lives up to hype.', rating: 5, date: Date.now() - 86400000*7, level: 2, likes: 9, liked: false },
+      { id: 'y4', restaurant: 'Pujol, Mexico City', lat: 19.43, lng: -99.19, by: 'Yaugandha', text: 'Modern Mexican. The 1,500-day mole is unforgettable.', rating: 5, date: Date.now() - 86400000*10, level: 1, likes: 4, liked: false },
+      { id: 'y5', restaurant: 'Attica, Melbourne', lat: -37.87, lng: 144.97, by: 'Yaugandha', text: 'Australian bush tucker reimagined. Truly unique.', rating: 5, date: Date.now() - 86400000*14, level: 2, likes: 3, liked: false },
+      { id: 'y6', restaurant: 'Central, Lima', lat: -12.09, lng: -77.03, by: 'Yaugandha', text: 'Altitude-based menu. Each course tells a story of Peru.', rating: 5, date: Date.now() - 86400000*18, level: 1, likes: 6, liked: false },
+      { id: 'y7', restaurant: 'Gaggan, Bangkok', lat: 13.75, lng: 100.54, by: 'Yaugandha', text: 'Progressive Indian. Emoji menu was fun and delicious.', rating: 4, date: Date.now() - 86400000*22, level: 2, likes: 5, liked: false },
+      { id: 'y8', restaurant: 'Le Bernardin, NYC', lat: 40.76, lng: -73.98, by: 'Yaugandha', text: 'Impeccable seafood. The Dover sole is perfection.', rating: 5, date: Date.now() - 86400000*28, level: 1, likes: 4, liked: false },
+      { id: 'y9', restaurant: 'Mugaritz, San Sebastian', lat: 43.28, lng: -1.93, by: 'Yaugandha', text: 'Edible stones and philosophical cuisine. Mind-blowing.', rating: 5, date: Date.now() - 86400000*35, level: 2, likes: 2, liked: false },
+      { id: 'y10', restaurant: 'Indian Accent, Delhi', lat: 28.61, lng: 77.22, by: 'Yaugandha', text: 'Indian flavors with global techniques. Blue cheese naan!', rating: 5, date: Date.now() - 86400000*42, level: 1, likes: 7, liked: false },
+      { id: 'l1', restaurant: 'Trishna, Mumbai', lat: 18.93, lng: 72.83, by: 'Lavanya', text: 'Best butter garlic crab in the city. Messy but worth it.', rating: 5, date: Date.now() - 86400000*3, level: 1, likes: 6, liked: false, photoFile: 'photo5.jpg' },
+      { id: 'l2', restaurant: 'The Fat Duck, Bray', lat: 51.51, lng: -0.70, by: 'Lavanya', text: 'Heston\'s theatrical dining. Snail porridge actually works!', rating: 5, date: Date.now() - 86400000*6, level: 2, likes: 8, liked: false },
+      { id: 'l3', restaurant: 'Masa, NYC', lat: 40.77, lng: -73.98, by: 'Lavanya', text: 'Omakase at its peak. The toro was like butter.', rating: 5, date: Date.now() - 86400000*9, level: 1, likes: 4, liked: false },
+      { id: 'l4', restaurant: 'Alinea, Chicago', lat: 41.91, lng: -87.65, by: 'Lavanya', text: 'Grant Achatz\'s edible balloon. Dining as art.', rating: 5, date: Date.now() - 86400000*11, level: 2, likes: 9, liked: false },
+      { id: 'l5', restaurant: 'Dinner by Heston, London', lat: 51.51, lng: -0.14, by: 'Lavanya', text: 'Meat fruit and tipsy cake. Historical British cuisine.', rating: 5, date: Date.now() - 86400000*16, level: 1, likes: 5, liked: false },
+      { id: 'l6', restaurant: 'Arpege, Paris', lat: 48.86, lng: 2.32, by: 'Lavanya', text: 'Alain Passard\'s vegetable garden. Vegetables never tasted so good.', rating: 5, date: Date.now() - 86400000*19, level: 2, likes: 3, liked: false },
+      { id: 'l7', restaurant: 'Eleven Madison Park, NYC', lat: 40.74, lng: -73.99, by: 'Lavanya', text: 'Plant-based fine dining. Creative and sustainable.', rating: 4, date: Date.now() - 86400000*24, level: 1, likes: 4, liked: false },
+      { id: 'l8', restaurant: 'Azurmendi, Bilbao', lat: 43.26, lng: -2.92, by: 'Lavanya', text: 'Farm-to-table in a glass cube. Stunning location.', rating: 5, date: Date.now() - 86400000*32, level: 2, likes: 2, liked: false },
+      { id: 'l9', restaurant: 'Odette, Singapore', lat: 1.30, lng: 103.85, by: 'Lavanya', text: 'French cuisine in a museum. Elegant and refined.', rating: 5, date: Date.now() - 86400000*38, level: 1, likes: 6, liked: false },
+      { id: 'l10', restaurant: 'Mingles, Seoul', lat: 37.52, lng: 127.03, by: 'Lavanya', text: 'Korean fine dining. Hanwoo beef was incredible.', rating: 5, date: Date.now() - 86400000*44, level: 2, likes: 4, liked: false },
+      { id: 't1', restaurant: 'Franklin Barbecue, Austin', lat: 30.27, lng: -97.73, by: 'Tom', text: 'Worth the 4-hour queue. Best brisket in Texas.', rating: 5, date: Date.now() - 86400000*2, level: 2, likes: 7, liked: false },
+      { id: 't2', restaurant: 'The Ledbury, London', lat: 51.52, lng: -0.20, by: 'Tom', text: 'Brett Graham\'s cooking. The venison is sublime.', rating: 5, date: Date.now() - 86400000*5, level: 1, likes: 3, liked: false },
+      { id: 't3', restaurant: 'Saison, San Francisco', lat: 37.78, lng: -122.40, by: 'Tom', text: 'Fire and smoke. California meets Japan.', rating: 5, date: Date.now() - 86400000*8, level: 2, likes: 5, liked: false },
+      { id: 't4', restaurant: 'Den, Tokyo', lat: 35.69, lng: 139.70, by: 'Tom', text: 'Dentucky Fried Chicken! Playful kaiseki.', rating: 5, date: Date.now() - 86400000*13, level: 1, likes: 8, liked: false },
+      { id: 't5', restaurant: 'Septime, Paris', lat: 48.86, lng: 2.37, by: 'Tom', text: 'Natural wines and seasonal French. No reservations needed for bar.', rating: 4, date: Date.now() - 86400000*17, level: 2, likes: 4, liked: false },
+      { id: 't6', restaurant: 'Single Thread, Healdsburg', lat: 38.61, lng: -122.87, by: 'Tom', text: 'Farm inn with incredible tasting menu. Romantic getaway.', rating: 5, date: Date.now() - 86400000*21, level: 1, likes: 3, liked: false },
+      { id: 't7', restaurant: 'Core by Clare Smyth, London', lat: 51.51, lng: -0.18, by: 'Tom', text: 'First female 3-Michelin-star chef in UK. Potato and roe dish!', rating: 5, date: Date.now() - 86400000*26, level: 2, likes: 6, liked: false },
+      { id: 't8', restaurant: 'Geranium, Copenhagen', lat: 55.69, lng: 12.57, by: 'Tom', text: 'Rasmus Kofoed\'s Nordic perfection. Views over the park.', rating: 5, date: Date.now() - 86400000*33, level: 1, likes: 5, liked: false },
+      { id: 't9', restaurant: 'Maido, Lima', lat: -12.09, lng: -77.03, by: 'Tom', text: 'Nikkei cuisine. Japanese-Peruvian fusion at its best.', rating: 5, date: Date.now() - 86400000*39, level: 2, likes: 4, liked: false },
+      { id: 't10', restaurant: 'The French Laundry, Yountville', lat: 38.40, lng: -122.36, by: 'Tom', text: 'Keller\'s iconic. The oyster and pearl lives up to legend.', rating: 5, date: Date.now() - 86400000*46, level: 1, likes: 9, liked: false },
+      { id: 'd1', restaurant: 'Dishoom, King\'s Cross London', lat: 51.53, lng: -0.12, by: 'Dick', text: 'Bombay café vibes. Black daal and chai are must-haves.', rating: 5, date: Date.now() - 86400000*1, level: 1, likes: 4, liked: false, verifiedVisit: true, wouldGoAgain: true },
+      { id: 'd2', restaurant: 'Joe\'s Stone Crab, Miami', lat: 25.77, lng: -80.13, by: 'Dick', text: 'Classic Miami. Stone crabs with mustard sauce.', rating: 5, date: Date.now() - 86400000*4, level: 2, likes: 5, liked: false },
+      { id: 'd3', restaurant: 'L\'Astrance, Paris', lat: 48.86, lng: 2.28, by: 'Dick', text: 'Pascal Barbot\'s surprise menu. No menu, just trust.', rating: 5, date: Date.now() - 86400000*7, level: 1, likes: 3, liked: false },
+      { id: 'd4', restaurant: 'Momofuku Ko, NYC', lat: 40.73, lng: -73.99, by: 'Dick', text: 'David Chang\'s counter experience. Shaved frozen foie gras.', rating: 5, date: Date.now() - 86400000*10, level: 2, likes: 6, liked: false },
+      { id: 'd5', restaurant: 'Amber, Hong Kong', lat: 22.28, lng: 114.16, by: 'Dick', text: 'Richard Ekkebus\'s French-Asian. The wagyu is legendary.', rating: 5, date: Date.now() - 86400000*14, level: 1, likes: 7, liked: false },
+      { id: 'd6', restaurant: 'Osteria Mozza, LA', lat: 34.10, lng: -118.33, by: 'Dick', text: 'Nancy Silverton\'s mozzarella bar. Burrata heaven.', rating: 5, date: Date.now() - 86400000*19, level: 2, likes: 4, liked: false },
+      { id: 'd7', restaurant: 'Restaurant Gordon Ramsay, London', lat: 51.49, lng: -0.16, by: 'Dick', text: 'Three stars. The lobster ravioli is iconic.', rating: 5, date: Date.now() - 86400000*23, level: 1, likes: 5, liked: false },
+      { id: 'd8', restaurant: 'Pujol, Mexico City', lat: 19.43, lng: -99.19, by: 'Dick', text: 'Enrique Olvera\'s mole madre. 1,500 days of flavor.', rating: 5, date: Date.now() - 86400000*29, level: 2, likes: 8, liked: false },
+      { id: 'd9', restaurant: 'Narisawa, Tokyo', lat: 35.67, lng: 139.72, by: 'Dick', text: 'Satoyama cuisine. Forest on a plate.', rating: 5, date: Date.now() - 86400000*36, level: 1, likes: 4, liked: false },
+      { id: 'd10', restaurant: 'El Celler de Can Roca', lat: 41.98, lng: 2.82, by: 'Dick', text: 'Roca brothers\' magic. The perfume dessert!', rating: 5, date: Date.now() - 86400000*43, level: 2, likes: 6, liked: false },
+      { id: 'h1', restaurant: 'St John, London', lat: 51.52, lng: -0.10, by: 'Harry', text: 'Nose-to-tail dining. Roast bone marrow and parsley salad.', rating: 5, date: Date.now() - 86400000*2, level: 2, likes: 5, liked: false },
+      { id: 'h2', restaurant: 'Sushi Saito, Tokyo', lat: 35.66, lng: 139.73, by: 'Harry', text: 'Impossible to book. But the sushi is transcendent.', rating: 5, date: Date.now() - 86400000*6, level: 1, likes: 7, liked: false },
+      { id: 'h3', restaurant: 'Le Jules Verne, Paris', lat: 48.86, lng: 2.29, by: 'Harry', text: 'Dining in the Eiffel Tower. Views and Alain Ducasse.', rating: 4, date: Date.now() - 86400000*9, level: 2, likes: 4, liked: false },
+      { id: 'h4', restaurant: 'The Clove Club, London', lat: 51.53, lng: -0.08, by: 'Harry', text: 'British ingredients, global techniques. Buttermilk fried chicken.', rating: 5, date: Date.now() - 86400000*13, level: 1, likes: 3, liked: false },
+      { id: 'h5', restaurant: 'Cosme, NYC', lat: 40.74, lng: -73.99, by: 'Harry', text: 'Enrique Olvera in NYC. The husk meringue is iconic.', rating: 5, date: Date.now() - 86400000*16, level: 2, likes: 6, liked: false },
+      { id: 'h6', restaurant: 'Mirazur, Menton', lat: 43.78, lng: 7.50, by: 'Harry', text: 'Mauro Colagreco\'s garden by the sea. World\'s best 2019.', rating: 5, date: Date.now() - 86400000*20, level: 1, likes: 8, liked: false },
+      { id: 'h7', restaurant: 'Atomix, NYC', lat: 40.74, lng: -73.99, by: 'Harry', text: 'Korean tasting menu. Each course tells a story.', rating: 5, date: Date.now() - 86400000*27, level: 2, likes: 4, liked: false },
+      { id: 'h8', restaurant: 'Asador Etxebarri, Axpe', lat: 43.11, lng: -2.60, by: 'Harry', text: 'Victor Arguinzoniz\'s grill. Everything cooked over fire.', rating: 5, date: Date.now() - 86400000*31, level: 1, likes: 5, liked: false },
+      { id: 'h9', restaurant: 'Benu, San Francisco', lat: 37.78, lng: -122.40, by: 'Harry', text: 'Corey Lee\'s Asian-American. The thousand-year-old egg.', rating: 5, date: Date.now() - 86400000*37, level: 2, likes: 3, liked: false },
+      { id: 'h10', restaurant: 'Gaggan Anand, Bangkok', lat: 13.75, lng: 100.54, by: 'Harry', text: 'Lick it up! Progressive Indian that changed the game.', rating: 5, date: Date.now() - 86400000*41, level: 1, likes: 9, liked: false }
+    ];
+
+    function loadFromStorage() {
+      try {
+        const user = localStorage.getItem(STORAGE_KEYS.user);
+        let reviews = localStorage.getItem(STORAGE_KEYS.reviews);
+        reviews = reviews ? JSON.parse(reviews) : DEFAULT_REVIEWS;
+        reviews = reviews.map(r => ({ ...r, cuisine: r.cuisine || 'Various', price: r.price || 2, verifiedVisit: r.verifiedVisit || false, wouldGoAgain: r.wouldGoAgain !== false }));
+        const comments = JSON.parse(localStorage.getItem(STORAGE_KEYS.comments) || '{}');
+        const connections = JSON.parse(localStorage.getItem(STORAGE_KEYS.connections) || '{}');
+        const connectionRequests = JSON.parse(localStorage.getItem(STORAGE_KEYS.connectionRequests) || '[]');
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.saved) || '[]');
+        const notifications = JSON.parse(localStorage.getItem(STORAGE_KEYS.notifications) || '[]');
+        const profiles = JSON.parse(localStorage.getItem(STORAGE_KEYS.profiles) || '{}');
+        const privateNotes = JSON.parse(localStorage.getItem(STORAGE_KEYS.privateNotes) || '{}');
+        const groupLists = JSON.parse(localStorage.getItem(STORAGE_KEYS.groupLists) || '{}');
+        const trustScores = JSON.parse(localStorage.getItem(STORAGE_KEYS.trustScores) || '{}');
+        return { user: user ? JSON.parse(user) : null, reviews, comments, connections, connectionRequests, saved, notifications, profiles, privateNotes, groupLists, trustScores };
+      } catch (e) { return { user: null, reviews: DEFAULT_REVIEWS, comments: {}, connections: {}, connectionRequests: [], saved: [], notifications: [], profiles: {}, privateNotes: {}, groupLists: {}, trustScores: {} }; }
+    }
+
+    function saveToStorage() {
+      try {
+        if (state.user) localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(state.user));
+        localStorage.setItem(STORAGE_KEYS.reviews, JSON.stringify(state.reviews));
+        localStorage.setItem(STORAGE_KEYS.comments, JSON.stringify(state.comments));
+        localStorage.setItem(STORAGE_KEYS.connections, JSON.stringify(state.connections));
+        localStorage.setItem(STORAGE_KEYS.connectionRequests, JSON.stringify(state.connectionRequests));
+        localStorage.setItem(STORAGE_KEYS.saved, JSON.stringify(state.saved));
+        localStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(state.notifications));
+        localStorage.setItem(STORAGE_KEYS.profiles, JSON.stringify(state.profiles));
+        localStorage.setItem(STORAGE_KEYS.privateNotes, JSON.stringify(state.privateNotes));
+        localStorage.setItem(STORAGE_KEYS.groupLists, JSON.stringify(state.groupLists));
+        localStorage.setItem(STORAGE_KEYS.trustScores, JSON.stringify(state.trustScores));
+      } catch (e) { console.warn('Storage save failed:', e); }
+    }
+
+    const stored = loadFromStorage();
+    const state = {
+      user: stored.user,
+      tab: 'feed',
+      rating: 0,
+      restaurantSearch: '',
+      searchResults: [],
+      selectedPlace: null,
+      reviewText: '',
+      reviews: stored.reviews,
+      comments: stored.comments,
+      connections: stored.connections,
+      connectionRequests: stored.connectionRequests,
+      saved: stored.saved,
+      notifications: stored.notifications,
+      profiles: stored.profiles,
+      privateNotes: stored.privateNotes,
+      groupLists: stored.groupLists,
+      trustScores: stored.trustScores,
+      feedSearch: '',
+      mapSearch: '',
+      menuOpen: false,
+      panel: 'main',
+      editingReview: null,
+      mapFilter: 'all',
+      feedCuisine: '',
+      feedPrice: '',
+      feedMinRating: 0,
+      viewRestaurant: null,
+      commentInput: {},
+      viewConnections: false,
+      addConnectionInput: '',
+      mapCuisine: '',
+      mapPrice: '',
+      addCuisine: '',
+      addPrice: 2,
+      addPhotos: [],
+      addVerifiedVisit: false,
+      addWouldGoAgain: true,
+      savedListFilter: 'Saved'
+    };
+
+    let searchTimer = null;
+    async function nominatimSearch(query) {
+      const res = await fetch(
+        'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=5',
+        { headers: { 'Accept': 'application/json', 'User-Agent': 'FoodieApp/1.0' } }
+      );
+      return res.json();
+    }
+
+    function searchRestaurants(q) {
+      state.restaurantSearch = q;
+      if (q.length < 3) { state.searchResults = []; updateAddReviewSearchResults(); return; }
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(async () => {
+        try {
+          let data = await nominatimSearch(q);
+          if (!data || data.length === 0) data = await nominatimSearch(q + ', USA');
+          if (!data || data.length === 0) data = await nominatimSearch(q + ' restaurant');
+          if (!data || data.length === 0) data = await nominatimSearch(q + ', California');
+          state.searchResults = (data && data.length) ? data.map(p => ({ name: p.display_name, lat: parseFloat(p.lat), lng: parseFloat(p.lon) })) : [{ name: q, lat: 37.37, lng: -122.03 }];
+        } catch (e) {
+          state.searchResults = [{ name: q, lat: 37.37, lng: -122.03 }];
+        }
+        updateAddReviewSearchResults();
+      }, 300);
+    }
+
+    async function geocodePlace(query) {
+      try {
+        const data = await nominatimSearch(query);
+        if (data && data.length > 0) {
+          const p = data[0];
+          return { lat: parseFloat(p.lat), lng: parseFloat(p.lon) };
+        }
+      } catch (e) {}
+      return null;
+    }
+
+    function updateAddReviewSearchResults() {
+      const el = document.getElementById('addReviewSearchResults');
+      if (!el) return;
+      if (!state.searchResults.length) {
+        el.innerHTML = '';
+        el.style.display = 'none';
+      } else {
+        el.className = 'search-results';
+        el.style.display = 'block';
+        el.innerHTML = state.searchResults.map((p, i) =>
+          `<div class="search-result-item" onclick="selectPlaceByIndex(${i})">${p.name}</div>`
+        ).join('');
+      }
+    }
+
+    function selectPlace(p) {
+      state.selectedPlace = p;
+      state.restaurantSearch = p.name;
+      state.searchResults = [];
+      render();
+    }
+    function selectPlaceByIndex(i) {
+      if (state.searchResults[i]) selectPlace(state.searchResults[i]);
+    }
+
+    function toggleLike(id) {
+      const r = state.reviews.find(x => x.id === id);
+      if (r) {
+        r.liked = !r.liked;
+        r.likes = (r.likes||0) + (r.liked ? 1 : -1);
+        if (r.liked && r.by !== state.user?.displayName) {
+          state.notifications.push({ id: Date.now().toString(), type: 'like', text: `${state.user.displayName} liked your review of ${r.restaurant}`, read: false, date: Date.now() });
+        }
+        saveToStorage(); render();
+      }
+    }
+
+    function getComments(reviewId) {
+      return (state.comments[reviewId] || []).slice();
+    }
+    function addComment(reviewId, text) {
+      if (!text || !text.trim()) return;
+      if (!state.comments[reviewId]) state.comments[reviewId] = [];
+      state.comments[reviewId].push({ id: Date.now().toString(), by: state.user.displayName, text: text.trim(), date: Date.now() });
+      const r = state.reviews.find(x => x.id === reviewId);
+      if (r && r.by !== state.user.displayName) {
+        state.notifications.push({ id: Date.now().toString(), type: 'comment', text: `${state.user.displayName} commented on your review of ${r.restaurant}`, read: false, date: Date.now() });
+      }
+      saveToStorage(); render();
+    }
+
+    function shareReview(id) {
+      const url = location.origin + location.pathname + (location.pathname.endsWith('/') ? '' : '/') + '?review=' + id;
+      navigator.clipboard.writeText(url).then(() => alert('Link copied! Share it with friends.')).catch(() => prompt('Copy this link:', url));
+    }
+
+    function getSavedKey(r) { return (r.lat + ',' + r.lng + '|' + (r.restaurant||'')).slice(0,80); }
+    function isSaved(r) { return state.saved.includes(getSavedKey(r)); }
+    function getPrivateNote(reviewId) { return (state.privateNotes || {})[reviewId] || ''; }
+    function setPrivateNote(reviewId, text) { if (!state.privateNotes) state.privateNotes = {}; state.privateNotes[reviewId] = (text || '').trim(); saveToStorage(); render(); }
+    function getReviewListNames(r) {
+      const k = getSavedKey(r);
+      const names = [];
+      if (state.saved.includes(k)) names.push('Saved');
+      Object.keys(state.groupLists || {}).forEach(listName => { if ((state.groupLists[listName] || []).includes(k)) names.push(listName); });
+      return names;
+    }
+    function toggleSaveById(reviewId) {
+      const r = state.reviews.find(x => x.id === reviewId);
+      if (!r) return;
+      const k = getSavedKey(r);
+      const i = state.saved.indexOf(k);
+      if (i >= 0) state.saved.splice(i, 1);
+      else {
+        state.saved.push(k);
+        const myConns = state.connections[state.user?.displayName] || [];
+        const connReviews = state.reviews.filter(x => myConns.includes(x.by) && Math.abs(x.lat - r.lat) < 0.01 && Math.abs(x.lng - r.lng) < 0.01 && x.by !== r.by);
+        if (connReviews.length > 0) {
+          const names = [...new Set(connReviews.map(x => x.by))].slice(0, 2).join(' and ');
+          state.notifications.push({ id: Date.now().toString(), type: 'connection_reviewed_saved', text: `${names} reviewed ${r.restaurant} — you saved this place!`, read: false, date: Date.now() });
+        }
+      }
+      saveToStorage(); render();
+    }
+    function addToList(reviewId, listName) {
+      const r = state.reviews.find(x => x.id === reviewId);
+      if (!r || !listName || listName === 'Saved') return;
+      const k = getSavedKey(r);
+      if (!state.groupLists[listName]) state.groupLists[listName] = [];
+      if (!state.groupLists[listName].includes(k)) state.groupLists[listName].push(k);
+      saveToStorage(); render();
+    }
+    function removeFromList(reviewId, listName) {
+      const r = state.reviews.find(x => x.id === reviewId);
+      if (!r) return;
+      const k = getSavedKey(r);
+      if (listName === 'Saved') { const i = state.saved.indexOf(k); if (i >= 0) state.saved.splice(i, 1); }
+      else if (state.groupLists[listName]) { const arr = state.groupLists[listName]; const i = arr.indexOf(k); if (i >= 0) arr.splice(i, 1); }
+      saveToStorage(); render();
+    }
+    function toggleList(reviewId, listName) {
+      const r = state.reviews.find(x => x.id === reviewId);
+      if (!r || !listName) return;
+      const k = getSavedKey(r);
+      const inList = (state.groupLists[listName] || []).includes(k);
+      if (inList) removeFromList(reviewId, listName);
+      else addToList(reviewId, listName);
+    }
+    function toggleListDropdown(ev, btn) {
+      if (ev) { ev.stopPropagation(); }
+      const w = btn.closest('.review-list-dropdown');
+      if (!w) return;
+      const m = w.querySelector('.list-dropdown-menu');
+      const b = w.querySelector('.list-dropdown-backdrop');
+      const open = m && m.style.display === 'block';
+      if (m) { m.style.display = open ? 'none' : 'block'; m.classList.toggle('show-mobile', !open); }
+      if (b) b.style.display = open ? 'none' : 'block';
+    }
+
+    function viewRestaurantDetail(restaurant, lat, lng) {
+      state.viewRestaurant = { name: restaurant, lat, lng };
+      state.panel = 'restaurant';
+      render();
+    }
+
+    function sendConnectionRequest(toName) {
+      if (!toName || !toName.trim()) return;
+      const from = state.user.displayName;
+      const to = toName.trim();
+      if (from === to) return;
+      const conns = state.connections[from] || [];
+      if (conns.includes(to)) return;
+      const reqs = state.connectionRequests || [];
+      if (reqs.some(r => r.from === from && r.to === to && r.status === 'pending')) return;
+      if (reqs.some(r => r.from === to && r.to === from && r.status === 'pending')) return;
+      reqs.push({ id: Date.now().toString(), from, to, status: 'pending', date: Date.now() });
+      state.connectionRequests = reqs;
+      state.notifications.push({ id: Date.now().toString(), type: 'request', text: `Connection request sent to ${to}. They'll need to approve.`, read: false, date: Date.now() });
+      state.notifications.push({ id: Date.now().toString(), type: 'connection_request', text: `${from} wants to connect with you`, read: false, date: Date.now(), recipient: to });
+      saveToStorage(); render();
+    }
+    function acceptConnectionRequest(reqId) {
+      const req = (state.connectionRequests || []).find(r => r.id === reqId && r.to === state.user.displayName && r.status === 'pending');
+      if (!req) return;
+      req.status = 'accepted';
+      const from = req.from, to = req.to;
+      if (!state.connections[from]) state.connections[from] = [];
+      if (!state.connections[from].includes(to)) state.connections[from].push(to);
+      if (!state.connections[to]) state.connections[to] = [];
+      if (!state.connections[to].includes(from)) state.connections[to].push(from);
+      state.notifications.push({ id: Date.now().toString(), type: 'connection', text: `You and ${from} are now connected.`, read: false, date: Date.now() });
+      saveToStorage(); render();
+    }
+    function ignoreConnectionRequest(reqId) {
+      const req = (state.connectionRequests || []).find(r => r.id === reqId && r.to === state.user.displayName);
+      if (req) { req.status = 'ignored'; saveToStorage(); render(); }
+    }
+    function removeConnection(name) {
+      const uid = state.user.displayName;
+      if (state.connections[uid]) {
+        state.connections[uid] = state.connections[uid].filter(c => c !== name);
+        if (state.connections[name]) state.connections[name] = state.connections[name].filter(c => c !== uid);
+        saveToStorage(); render();
+      }
+    }
+    function getPeopleYouCanAdd() {
+      const me = state.user?.displayName;
+      if (!me) return [];
+      const allUsers = [...new Set([...DEMO_USERS, ...state.reviews.map(r => r.by)].filter(Boolean))];
+      const conns = state.connections[me] || [];
+      const reqs = state.connectionRequests || [];
+      const pendingFromMe = reqs.filter(r => r.from === me && r.status === 'pending').map(r => r.to);
+      return allUsers.filter(u => u !== me && !conns.includes(u) && !pendingFromMe.includes(u));
+    }
+    function getPendingRequestsFromMe() {
+      return (state.connectionRequests || []).filter(r => r.from === state.user?.displayName && r.status === 'pending');
+    }
+    function getPendingRequestsForMe() {
+      return (state.connectionRequests || []).filter(r => r.to === state.user?.displayName && r.status === 'pending');
+    }
+    function canConnectWith(name) {
+      if (!name || !state.user) return false;
+      if (name === state.user.displayName) return false;
+      const conns = state.connections[state.user.displayName] || [];
+      if (conns.includes(name)) return false;
+      return true;
+    }
+    function hasPendingRequestTo(name) {
+      return (state.connectionRequests || []).some(r => r.from === state.user?.displayName && r.to === name && r.status === 'pending');
+    }
+
+    function getInitials(name) {
+      return (name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    }
+
+    function getReviewPhotoUrls(r) {
+      if (r.photos && r.photos.length > 0) return r.photos;
+      if (r.photoFile) return [PHOTOS_BASE + r.photoFile];
+      return [];
+    }
+
+    function getConnectionLabel(level) {
+      if (level === 1) return '1st';
+      if (level === 2) return '2nd';
+      return 'You';
+    }
+    function getMutualConnectionsCount(r) {
+      if (!state.user || !r) return 0;
+      const myConns = state.connections[state.user.displayName] || [];
+      const samePlace = state.reviews.filter(x => Math.abs(x.lat - r.lat) < 0.01 && Math.abs(x.lng - r.lng) < 0.01 && x.by !== r.by);
+      return samePlace.filter(x => myConns.includes(x.by)).length;
+    }
+    function getTrustScore(name) {
+      if (!state.user || !name || name === state.user.displayName) return null;
+      const cached = state.trustScores[name];
+      if (cached !== undefined) return cached;
+      const myReviews = state.reviews.filter(r => r.by === state.user.displayName);
+      const theirReviews = state.reviews.filter(r => r.by === name);
+      const overlap = myReviews.filter(m => theirReviews.some(t => Math.abs(m.lat - t.lat) < 0.01 && Math.abs(m.lng - t.lng) < 0.01));
+      if (overlap.length === 0) return 75;
+      const match = overlap.filter(p => {
+        const theirs = theirReviews.find(t => Math.abs(p.lat - t.lat) < 0.01 && Math.abs(p.lng - t.lng) < 0.01);
+        return theirs && Math.abs((p.rating||0) - (theirs.rating||0)) <= 1;
+      }).length;
+      return Math.round(50 + (match / Math.max(1, overlap.length)) * 50);
+    }
+    function getEffectiveLevel(r) {
+      if (!r || !state.user) return 2;
+      if (r.by === state.user.displayName) return 3;
+      const myConns = state.connections[state.user.displayName] || [];
+      if (myConns.includes(r.by)) return 1;
+      if (myConns.some(c => (state.connections[c] || []).includes(r.by))) return 2;
+      return 2;
+    }
+
+    function editReviewById(id) {
+      const review = state.reviews.find(r => r.id === id);
+      if (review) editReview(review);
+    }
+    function editReview(review) {
+      state.editingReview = review;
+      state.restaurantSearch = review.restaurant;
+      state.selectedPlace = { name: review.restaurant, lat: review.lat, lng: review.lng };
+      state.rating = review.rating;
+      state.reviewText = review.text;
+      state.addCuisine = review.cuisine || '';
+      state.addPrice = review.price || 2;
+      state.addPhotos = (review.photos || []).slice();
+      state.addVerifiedVisit = !!review.verifiedVisit;
+      state.addWouldGoAgain = review.wouldGoAgain !== false;
+      state.searchResults = [];
+      setTab('add');
+    }
+
+    function cancelEdit() {
+      state.editingReview = null;
+      state.rating = 0;
+      state.reviewText = '';
+      state.restaurantSearch = '';
+      state.selectedPlace = null;
+      state.searchResults = [];
+      state.addCuisine = ''; state.addPrice = 2; state.addPhotos = []; state.addVerifiedVisit = false; state.addWouldGoAgain = true;
+      setTab('feed');
+    }
+
+    function handleProfilePhoto(input) {
+      const f = input?.files?.[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = function() {
+        let d = r.result;
+        if (d.length > 100000) {
+          const img = new Image();
+          img.onload = function() {
+            const c = document.createElement('canvas');
+            c.width = Math.min(200, img.width); c.height = Math.min(200, img.height);
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            d = c.toDataURL('image/jpeg', 0.7);
+            const uid = state.user?.displayName;
+            if (uid) { if (!state.profiles[uid]) state.profiles[uid] = {}; state.profiles[uid].avatar = d; saveToStorage(); render(); }
+          };
+          img.src = d;
+        } else {
+          const uid = state.user?.displayName;
+          if (uid) { if (!state.profiles[uid]) state.profiles[uid] = {}; state.profiles[uid].avatar = d; saveToStorage(); render(); }
+        }
+      };
+      r.readAsDataURL(f);
+      input.value = '';
+    }
+
+    function handlePhotoUpload(input) {
+      const files = input.files;
+      if (!files || !files.length) return;
+      const maxSize = 300000;
+      for (let i = 0; i < Math.min(files.length, 4); i++) {
+        const f = files[i];
+        if (f.size > maxSize * 2) continue;
+        const r = new FileReader();
+        r.onload = function() {
+          let data = r.result;
+          if (data.length > maxSize && data.startsWith('data:image')) {
+            const img = new Image();
+            img.onload = function() {
+              const c = document.createElement('canvas');
+              const scale = Math.min(1, Math.sqrt(maxSize / (img.width * img.height * 0.5)));
+              c.width = img.width * scale; c.height = img.height * scale;
+              c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+              state.addPhotos = state.addPhotos || [];
+              if (state.addPhotos.length < 4) state.addPhotos.push(c.toDataURL('image/jpeg', 0.7));
+              saveToStorage(); render();
+            };
+            img.src = data;
+          } else {
+            state.addPhotos = state.addPhotos || [];
+            if (state.addPhotos.length < 4) state.addPhotos.push(data);
+            saveToStorage(); render();
+          }
+        };
+        r.readAsDataURL(f);
+      }
+      input.value = '';
+    }
+
+    async function addReview() {
+      const text = (document.querySelector('.add-review-textarea') || {}).value || state.reviewText;
+      if (!text.trim() || state.rating < 1) { alert('Please add a rating and write your review.'); return; }
+      if (state.editingReview) {
+        const idx = state.reviews.findIndex(r => r.id === state.editingReview.id);
+        if (idx >= 0) {
+          let place = state.selectedPlace || { name: state.editingReview.restaurant, lat: state.editingReview.lat, lng: state.editingReview.lng };
+          if (state.restaurantSearch.trim() && state.restaurantSearch.trim() !== state.editingReview.restaurant) {
+            const geocoded = await geocodePlace(state.restaurantSearch.trim());
+            if (geocoded) place = { name: state.restaurantSearch.trim(), lat: geocoded.lat, lng: geocoded.lng };
+            else if (!state.selectedPlace) place = { name: state.restaurantSearch.trim(), lat: state.editingReview.lat, lng: state.editingReview.lng };
+          }
+          const updated = { ...state.reviews[idx], text: text.trim(), rating: state.rating, restaurant: place.name, lat: place.lat, lng: place.lng, cuisine: state.addCuisine || 'Various', price: state.addPrice || 2, photos: (state.addPhotos || []).slice(), verifiedVisit: state.addVerifiedVisit, wouldGoAgain: state.addWouldGoAgain };
+          state.reviews[idx] = updated;
+          saveToStorage();
+        }
+        cancelEdit();
+        return;
+      }
+      let place = state.selectedPlace;
+      if (!place && state.restaurantSearch.trim()) {
+        const name = state.restaurantSearch.trim();
+        place = { name: name, lat: 37.37, lng: -122.03 };
+        const geocoded = await geocodePlace(name);
+        if (geocoded) place = { name: name, lat: geocoded.lat, lng: geocoded.lng };
+      }
+      if (!place) { alert('Please select a restaurant.'); return; }
+      state.reviews.unshift({
+        id: Date.now().toString(),
+        restaurant: place.name || state.restaurantSearch.trim(),
+        lat: place.lat,
+        lng: place.lng,
+        by: state.user.displayName,
+        text: text.trim(),
+        rating: state.rating,
+        date: Date.now(),
+        level: 3,
+        likes: 0,
+        liked: false,
+        cuisine: state.addCuisine || 'Various',
+        price: state.addPrice || 2,
+        photos: state.addPhotos || [],
+        verifiedVisit: state.addVerifiedVisit,
+        wouldGoAgain: state.addWouldGoAgain
+      });
+      state.rating = 0;
+      state.reviewText = '';
+      state.restaurantSearch = '';
+      state.selectedPlace = null;
+      state.editingReview = null;
+      state.addCuisine = ''; state.addPrice = 2; state.addPhotos = []; state.addVerifiedVisit = false; state.addWouldGoAgain = true;
+      saveToStorage();
+      setTab('feed');
+    }
+
+    function getMapRestaurants() {
+      let list = state.reviews;
+      if (state.mapFilter === '1') list = list.filter(r => getEffectiveLevel(r) === 1);
+      else if (state.mapFilter === '2') list = list.filter(r => getEffectiveLevel(r) === 2);
+      if (state.mapCuisine) list = list.filter(r => (r.cuisine||'Various') === state.mapCuisine);
+      if (state.mapPrice) list = list.filter(r => (r.price||2) <= parseInt(state.mapPrice));
+      const byLocation = {};
+      list.forEach(r => {
+        const k = r.lat + ',' + r.lng;
+        const lvl = getEffectiveLevel(r);
+        if (!byLocation[k] || lvl < (byLocation[k].level || 3)) {
+          byLocation[k] = { name: r.restaurant, lat: r.lat, lng: r.lng, level: lvl };
+        }
+      });
+      return Object.values(byLocation);
+    }
+
+    function getFilteredReviews() {
+      let list = state.reviews;
+      if (state.panel === 'myreviews') list = list.filter(r => r.by === state.user?.displayName);
+      const q = (state.feedSearch || '').toLowerCase().trim();
+      if (q) list = list.filter(r =>
+        (r.restaurant||'').toLowerCase().includes(q) ||
+        (r.by||'').toLowerCase().includes(q) ||
+        (r.text||'').toLowerCase().includes(q) ||
+        ((r.cuisine||'')+'').toLowerCase().includes(q)
+      );
+      if (state.feedCuisine) list = list.filter(r => (r.cuisine||'Various') === state.feedCuisine);
+      if (state.feedPrice) list = list.filter(r => (r.price||2) <= parseInt(state.feedPrice));
+      if (state.feedMinRating) list = list.filter(r => (r.rating||0) >= parseInt(state.feedMinRating));
+      return list;
+    }
+
+    function renderReviewCard(r) {
+      const effLevel = getEffectiveLevel(r);
+      const isOwn = (effLevel === 3) || (state.user && r.by === state.user.displayName);
+      const comments = getComments(r.id);
+      const saved = isSaved(r);
+      const mutualCount = getMutualConnectionsCount(r);
+      const trustScore = !isOwn && (effLevel === 1 || effLevel === 2) ? getTrustScore(r.by) : null;
+      const privateNote = isOwn ? getPrivateNote(r.id) : '';
+      return `
+        <div class="review-card" data-review-id="${r.id}">
+          <div class="review-card-header">
+            <div class="review-avatar ${effLevel===3?'self':''}">${getInitials(r.by)}</div>
+            <div class="review-header-meta">
+              <div class="review-header-top">
+                <span class="review-by">${r.by}</span>
+                ${canConnectWith(r.by) ? (hasPendingRequestTo(r.by) ? `<button class="connect-btn pending" title="Request sent">+</button>` : `<button class="connect-btn" onclick="sendConnectionRequest('${(r.by||'').replace(/'/g,"\\'")}'); render()" title="Connect">+</button>`) : ''}
+                <span class="review-connection">${getConnectionLabel(effLevel)}</span>
+                ${r.verifiedVisit ? `<span class="badge-verified" title="Verified visit">✓ Verified</span>` : ''}
+                ${r.wouldGoAgain ? `<span class="badge-again" title="Would go again">🔄 Again</span>` : ''}
+                ${trustScore !== null ? `<span class="badge-trust" title="Taste match">${trustScore}% match</span>` : ''}
+                ${isOwn ? `<button class="review-edit-btn" onclick="editReviewById('${r.id}')" title="Edit">✏️ Edit</button>` : ''}
+              </div>
+              <div class="review-date">${formatDate(r.date)}</div>
+              <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${r.restaurant}">${(r.restaurant||'').substring(0,60)}${(r.restaurant||'').length>60?'...':''}</div>
+              ${mutualCount > 0 ? `<div class="mutual-connections">${mutualCount} ${mutualCount===1?'friend':'friends'} also reviewed this</div>` : ''}
+              ${(r.cuisine||r.price) ? `<div style="font-size:0.75rem;color:#666;margin-top:2px">${r.cuisine||''} ${PRICE_LABELS[(r.price||2)-1]||''}</div>` : ''}
+            </div>
+          </div>
+          <div class="review-card-body">
+            <p class="review-text">${r.text}</p>
+            ${(getReviewPhotoUrls(r).length) ? `<div class="review-photos">${getReviewPhotoUrls(r).map(p=>`<img src="${p}" alt="Review photo" onerror="this.style.display='none'">`).join('')}</div>` : ''}
+            <div class="review-rating">${'❤️'.repeat(r.rating)}</div>
+          </div>
+          <div class="review-actions">
+            <button class="review-action-btn ${r.liked?'liked':''}" onclick="toggleLike('${r.id}')" aria-label="Like">${r.liked?'❤️':'🤍'} Like</button>
+            <button class="review-action-btn" onclick="document.getElementById('commentInput${r.id}')?.focus()" aria-label="Comment">💬 Comment ${comments.length?`(${comments.length})`:''}</button>
+            <button class="review-action-btn" onclick="shareReview('${r.id}')" aria-label="Share">↗️ Share</button>
+            <button class="review-action-btn" onclick="toggleSaveById('${r.id}')" aria-label="Save">${saved?'🔖':'📑'} ${saved?'Saved':'Save'}</button>
+            ${isOwn ? `<button class="review-action-btn" onclick="editReviewById('${r.id}')">✏️ Edit</button>` : ''}
+          </div>
+          <div class="review-actions-secondary">
+            <div class="review-list-dropdown">
+              <button type="button" class="review-action-btn list-trigger-btn" onclick="toggleListDropdown(event, this)" aria-label="Add to list">📋 Add to list</button>
+              <div class="list-dropdown-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:199" onclick="var w=this.closest('.review-list-dropdown'); w.querySelector('.list-dropdown-menu').style.display='none'; w.querySelector('.list-dropdown-menu').classList.remove('show-mobile'); this.style.display='none'"></div>
+              <div class="list-dropdown-menu" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;background:white;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:8px;min-width:160px;z-index:50;max-height:50vh;overflow-y:auto">
+                ${GROUP_LIST_NAMES.filter(n=>n!=='Saved').map(listName=>{
+                  const inList = (state.groupLists[listName]||[]).includes(getSavedKey(r));
+                  return `<button onclick="toggleList('${r.id}','${listName}'); var w=this.closest('.review-list-dropdown'); if(w){var m=w.querySelector('.list-dropdown-menu'); var b=w.querySelector('.list-dropdown-backdrop'); if(m){m.style.display='none';m.classList.remove('show-mobile');} if(b)b.style.display='none'}" style="display:block;width:100%;padding:12px 16px;text-align:left;border:none;background:none;cursor:pointer;font-size:1rem">${inList?'✓ ':''}${listName}</button>`;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+          ${isOwn && (privateNote || true) ? `<div class="private-note" style="padding:8px 16px 8px 76px;background:#f9f9f9;border-top:1px solid #eee">
+            <label style="font-size:0.8rem;color:#666">Private note (only you see):</label>
+            <input type="text" value="${(privateNote||'').replace(/"/g,'&quot;')}" placeholder="e.g. Try the lamb biryani" onchange="setPrivateNote('${r.id}',this.value)" style="width:100%;padding:8px;margin-top:4px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem">
+          </div>` : ''}
+          ${comments.length ? `<div class="review-comments">${comments.map(c=>`<div class="comment-item" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><strong>${c.by}:</strong>${canConnectWith(c.by) ? (hasPendingRequestTo(c.by) ? `<button class="connect-btn pending" title="Request sent">+</button>` : `<button class="connect-btn" onclick="sendConnectionRequest('${(c.by||'').replace(/'/g,"\\'")}'); render()" title="Connect">+</button>`) : ''}<span>${(c.text||'').replace(/</g,'&lt;')}</span></div>`).join('')}</div>` : ''}
+          <div class="review-comments">
+            <div class="comment-form">
+              <input type="text" id="commentInput${r.id}" placeholder="Write a comment..." onkeydown="if(event.key==='Enter')addComment('${r.id}',this.value)&&(this.value='')">
+              <button onclick="var i=document.getElementById('commentInput${r.id}'); addComment('${r.id}',i.value); i.value=''">Post</button>
+            </div>
+          </div>
+          ${(r.likes||0) > 0 ? `<div style="padding: 0 16px 4px 76px; font-size: 0.8rem; color: #666;">${r.likes} ${r.likes===1?'like':'likes'}</div>` : ''}
+        </div>
+      `;
+    }
+
+    function openMenu() { state.menuOpen = true; render(); }
+    function closeMenu() { state.menuOpen = false; render(); }
+
+    function updateFeedCards() {
+      const el = document.getElementById('feedCards');
+      if (!el) return;
+      el.innerHTML = getFilteredReviews().map(r => renderReviewCard(r)).join('');
+    }
+
+    function updateMapSearch() {
+      const el = document.getElementById('mapSearchInput');
+      if (el) state.mapSearch = el.value;
+      if (state.tab === 'map') initMap();
+    }
+
+    function render() {
+      const app = document.getElementById('app');
+      if (!state.user) {
+        app.innerHTML = `
+          <div class="signup-page">
+            <div class="signup-top">
+              <img src="logo/Foodie_white.svg" alt="Foodie" class="signup-logo-img">
+            </div>
+            <div class="signup-bottom">
+              <div class="signup-actions">
+                <p class="signup-demo-label">Demo: try with phone or quick login</p>
+                <div style="display:flex;gap:8px;width:100%;max-width:320px">
+                  <select id="signupCountry" style="flex:0 0 80px;padding:14px;border:2px solid rgba(255,255,255,0.6);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:1rem">
+                    <option value="+1">🇺🇸 +1</option>
+                    <option value="+44">🇬🇧 +44</option>
+                    <option value="+91">🇮🇳 +91</option>
+                    <option value="+81">🇯🇵 +81</option>
+                    <option value="+33">🇫🇷 +33</option>
+                    <option value="+49">🇩🇪 +49</option>
+                    <option value="+61">🇦🇺 +61</option>
+                  </select>
+                  <input type="tel" id="signupPhone" placeholder="Phone number" style="flex:1;padding:14px;border:2px solid rgba(255,255,255,0.6);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:1rem" />
+                </div>
+                <input type="email" id="signupEmail" placeholder="Or use email" style="width:100%;max-width:320px;padding:14px;border:2px solid rgba(255,255,255,0.6);border-radius:8px;background:rgba(255,255,255,0.1);color:white;font-size:1rem" />
+                <button class="signup-btn" onclick="login('Demo User')" style="font-size:1.2rem">SIGNUP / LOGIN (Demo)</button>
+                <p style="font-size:0.8rem;color:rgba(255,255,255,0.6);margin-top:8px">In demo, any input works. Real app would verify via OTP.</p>
+              </div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const reviews = getFilteredReviews();
+      const mapRestaurants = getMapRestaurants();
+
+      let mainContent = '';
+      if (state.panel === 'editprofile') {
+        const uid = state.user?.displayName || '';
+        const prof = state.profiles[uid] || {};
+        const myReviews = state.reviews.filter(r => r.by === uid).length;
+        mainContent = `<div class="main"><div style="padding:16px;background:white;border-radius:8px;max-width:400px;margin:0 auto">
+          <h2 style="margin-bottom:16px">Edit Profile</h2>
+          <div style="text-align:center;margin-bottom:16px">
+            <label style="cursor:pointer;display:inline-block">
+              <div class="menu-sidebar-avatar" style="margin:0 auto;background-image:url(${prof.avatar||''});background-size:cover;background-position:center">${prof.avatar ? '' : getInitials(uid)}</div>
+              <input type="file" accept="image/*" onchange="handleProfilePhoto(this)" style="display:none">
+              <div style="font-size:0.8rem;color:#666;margin-top:4px">Tap to change photo</div>
+            </label>
+          </div>
+          <input type="text" placeholder="Name" value="${(uid||'').replace(/"/g,'&quot;')}" id="profileName" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px">
+          <textarea placeholder="Bio (optional)" id="profileBio" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px;min-height:80px;resize:vertical">${(prof.bio||'').replace(/</g,'&lt;')}</textarea>
+          <div style="display:flex;gap:16px;margin-bottom:16px;color:#666;font-size:0.9rem"><span>📝 ${myReviews} reviews</span><span>🔖 ${state.saved.length} saved</span></div>
+          <button onclick="var old=state.user.displayName; state.user.displayName=document.getElementById('profileName').value; var p=state.profiles[state.user.displayName]||state.profiles[old]||{}; p.bio=document.getElementById('profileBio').value; if(state.profiles[old]?.avatar) p.avatar=state.profiles[old].avatar; state.profiles[state.user.displayName]=p; if(old!==state.user.displayName) delete state.profiles[old]; saveToStorage(); state.panel='main'; render()" style="padding:12px 24px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">Save</button>
+          <button onclick="state.panel='main'; render()" style="padding:12px 24px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer;margin-left:8px">Cancel</button>
+        </div></div>`;
+      } else if (state.panel === 'saved') {
+        const savedReviews = state.reviews.filter(r => isSaved(r));
+        const listName = (state.savedListFilter || 'Saved');
+        const getReviewsForList = (name) => {
+          if (name === 'Saved') return state.reviews.filter(r => isSaved(r));
+          const keys = state.groupLists[name] || [];
+          return state.reviews.filter(r => keys.includes(getSavedKey(r)));
+        };
+        const listCounts = { Saved: savedReviews.length };
+        GROUP_LIST_NAMES.filter(n=>n!=='Saved').forEach(n => { listCounts[n] = (state.groupLists[n]||[]).length; });
+        mainContent = `<div class="main">
+          <div style="margin-bottom:12px"><button onclick="state.panel='main'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
+          <h2 style="margin-bottom:16px">Lists</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+            ${GROUP_LIST_NAMES.map(name=>`<button onclick="state.savedListFilter='${name}'; render()" style="padding:8px 14px;border-radius:8px;border:1px solid #ddd;background:${listName===name?'#e31919':''};color:${listName===name?'white':'#333'};cursor:pointer;font-size:0.9rem">${name} (${listCounts[name]||0})</button>`).join('')}
+          </div>
+          <h3 style="margin-bottom:12px">${listName} (${getReviewsForList(listName).length})</h3>
+          ${getReviewsForList(listName).length ? getReviewsForList(listName).map(r=>renderReviewCard(r)).join('') : '<p style="color:#666">No restaurants in this list yet. Use the List button on reviews to add.</p>'}
+        </div>`;
+      } else if (state.panel === 'network') {
+        const pendingForMe = getPendingRequestsForMe();
+        const peopleToAdd = getPeopleYouCanAdd();
+        const conns = state.connections[state.user?.displayName] || [];
+        mainContent = `<div class="main">
+          <div style="margin-bottom:12px"><button onclick="state.panel='main'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
+          <h2 style="margin-bottom:20px">Network</h2>
+          ${pendingForMe.length ? `
+          <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Invitations (${pendingForMe.length})</h3>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:12px">These people want to connect with you. Approve to add them to your network.</p>
+          <div style="margin-bottom:24px">${pendingForMe.map(r=>`
+            <div class="network-card" style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div class="review-avatar" style="width:48px;height:48px;font-size:1rem">${getInitials(r.from)}</div>
+                <div>
+                  <div style="font-weight:600">${r.from}</div>
+                  <div style="font-size:0.8rem;color:#666">Wants to connect</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button onclick="acceptConnectionRequest('${r.id}'); render()" style="padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Accept</button>
+                <button onclick="ignoreConnectionRequest('${r.id}'); render()" style="padding:8px 16px;background:#eee;color:#333;border:none;border-radius:8px;cursor:pointer">Ignore</button>
+              </div>
+            </div>
+          `).join('')}</div>
+          ` : ''}
+          ${(getPendingRequestsFromMe()).length ? `
+          <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Pending (sent)</h3>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:12px">Waiting for these people to approve your request.</p>
+          <div style="margin-bottom:24px">${getPendingRequestsFromMe().map(r=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#f9f9f9;border-radius:8px;margin-bottom:8px">
+              <span>${r.to}</span>
+              <span style="font-size:0.85rem;color:#666">Pending</span>
+            </div>
+          `).join('')}</div>
+          ` : ''}
+          <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Add to your network</h3>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:12px">People you can connect with. They'll need to approve your request.</p>
+          <div style="margin-bottom:24px">${peopleToAdd.length ? peopleToAdd.map(u=>`
+            <div class="network-card" style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div class="review-avatar" style="width:48px;height:48px;font-size:1rem">${getInitials(u)}</div>
+                <div style="font-weight:600">${u}</div>
+              </div>
+              <button onclick="sendConnectionRequest('${u}'); render()" style="padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Connect</button>
+            </div>
+          `).join('') : '<p style="color:#666;padding:16px;background:#f9f9f9;border-radius:8px">No one to add right now. Everyone in your network is already connected!</p>'}</div>
+          <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Your connections (${conns.length})</h3>
+          <div>${conns.length ? conns.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,0.06)"><span>${c}</span><button onclick="removeConnection('${c}'); render()" style="padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">Remove</button></div>`).join('') : '<p style="color:#666">No connections yet. Send requests above and wait for approval.</p>'}</div>
+        </div>`;
+      } else if (state.panel === 'notifications') {
+        const notifs = state.notifications.filter(n => !n.recipient || n.recipient === state.user?.displayName).slice().reverse();
+        mainContent = `<div class="main">
+          <div style="margin-bottom:12px"><button onclick="state.panel='main'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
+          <h2 style="margin-bottom:16px">Notifications</h2>
+          ${notifs.length ? notifs.map(n=>`<div style="padding:12px;background:white;border-radius:8px;margin-bottom:8px;${n.read?'opacity:0.7':''}${n.type==='connection_request'?'cursor:pointer':''}" ${n.type==='connection_request'?'onclick="state.panel=\'network\'; render()"':''}>${n.text}${n.type==='connection_request'?' — Tap to view in Network':''}</div>`).join('') + `<button onclick="state.notifications.forEach(n=>{if(!n.recipient||n.recipient===state.user?.displayName)n.read=true}); saveToStorage(); render()" style="margin-top:12px;padding:8px 16px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer">Mark all read</button>` : '<p style="color:#666">No notifications yet.</p>'}
+        </div>`;
+      } else if (state.panel === 'restaurant' && state.viewRestaurant) {
+        const vr = state.viewRestaurant;
+        const restReviews = state.reviews.filter(r => Math.abs(r.lat - vr.lat) < 0.01 && Math.abs(r.lng - vr.lng) < 0.01);
+        const avgRating = restReviews.length ? (restReviews.reduce((s,r)=>s+(r.rating||0),0) / restReviews.length).toFixed(1) : '-';
+        const cuisines = [...new Set(restReviews.map(r=>r.cuisine||'Various'))];
+        mainContent = `<div class="main">
+          <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.viewRestaurant=null; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
+          <div style="padding:20px;background:white;border-radius:12px;margin-bottom:16px">
+            <h1 style="font-size:1.5rem;margin-bottom:8px">${vr.name}</h1>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;color:#666;font-size:0.95rem">
+              <span>❤️ ${avgRating} (${restReviews.length} reviews)</span>
+              ${cuisines.length ? `<span>${cuisines.join(', ')}</span>` : ''}
+            </div>
+            <a href="https://www.google.com/maps?q=${vr.lat},${vr.lng}" target="_blank" rel="noopener" style="display:inline-block;margin-top:12px;color:#0a66c2;font-size:0.9rem">📍 Get directions</a>
+          </div>
+          <h3 style="margin-bottom:12px">Reviews</h3>
+          ${restReviews.length ? restReviews.map(r=>renderReviewCard(r)).join('') : '<p style="color:#666">No reviews yet.</p>'}
+        </div>`;
+      } else if (state.panel === 'feedback') {
+        mainContent = `<div class="main"><div style="padding:16px;background:white;border-radius:8px;max-width:400px;margin:0 auto">
+          <h2 style="margin-bottom:16px">Feedback</h2>
+          <textarea id="feedbackText" placeholder="Share your feedback..." style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px;min-height:100px"></textarea>
+          <button onclick="alert('Thanks! Feedback submitted.'); state.panel='main'; render()" style="padding:12px 24px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">Submit</button>
+          <button onclick="state.panel='main'; render()" style="padding:12px 24px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer;margin-left:8px">Cancel</button>
+        </div></div>`;
+      } else if (state.tab === 'feed' || state.panel === 'myreviews') {
+        mainContent = '<div class="main">' +
+          (state.panel === 'myreviews' ? `<div style="margin-bottom:12px"><button onclick="state.panel='main'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>` : '') +
+          (state.panel === 'main' ? `<div class="feed-search"><input type="text" id="feedSearchInput" placeholder="Search reviews, restaurants, or people..." value="${(state.feedSearch||'').replace(/"/g,'&quot;')}" oninput="state.feedSearch=this.value; updateFeedCards()"></div>
+            <div class="feed-filters">
+              <select onchange="state.feedCuisine=this.value; updateFeedCards()" style="padding:8px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem">
+                <option value="">All cuisines</option>${CUISINES.map(c=>`<option value="${c}" ${state.feedCuisine===c?'selected':''}>${c}</option>`).join('')}
+              </select>
+              <select onchange="state.feedPrice=this.value; updateFeedCards()" style="padding:8px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem">
+                <option value="">Any price</option>${[1,2,3,4].map(p=>`<option value="${p}" ${state.feedPrice==p?'selected':''}>Up to ${PRICE_LABELS[p-1]}</option>`).join('')}
+              </select>
+              <select onchange="state.feedMinRating=this.value; updateFeedCards()" style="padding:8px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem">
+                <option value="0">Any rating</option>${[4,5].map(r=>`<option value="${r}" ${state.feedMinRating==r?'selected':''}>${r}+ stars</option>`).join('')}
+              </select>
+            </div>` : '') +
+          (state.panel === 'main' ? `<div class="feed-compose" onclick="setTab('add')">
+            <div class="feed-compose-avatar">${getInitials(state.user.displayName)}</div>
+            <span class="feed-compose-text">Share a restaurant review</span>
+          </div>` : '') +
+          `<div id="feedCards">` + reviews.map(r => renderReviewCard(r)).join('') + '</div></div>';
+      } else if (state.tab === 'add' && state.panel === 'main') {
+        const isEditing = !!state.editingReview;
+        mainContent = `
+          <div class="main add-review-page">
+            <div style="position:relative">
+              <input type="text" class="add-review-input" id="addReviewRestaurantInput" placeholder="${isEditing ? 'Change restaurant or address (search to update)' : 'Type restaurant name to search (min 3 chars)'}" 
+                value="${(state.restaurantSearch||'').replace(/"/g,'&quot;')}" 
+                oninput="searchRestaurants(this.value)">
+              <div id="addReviewSearchResults" class="search-results" style="display:${state.searchResults.length?'block':'none'}">${state.searchResults.map((p, i) => `
+                <div class="search-result-item" onclick="selectPlaceByIndex(${i})">${p.name}</div>
+              `).join('')}</div>
+            </div>
+            <div class="add-review-rating">
+              <span>Rating</span>
+              <div class="rating-hearts">
+                ${[1,2,3,4,5].map(i => `<button type="button" class="heart ${state.rating>=i?'active':''}" onclick="setRating(${i})">❤️</button>`).join('')}
+              </div>
+            </div>
+            <div class="add-review-meta">
+              <select id="addCuisine" onchange="state.addCuisine=this.value; render()" style="padding:10px;border-radius:8px;border:1px solid #ddd;flex:1">
+                <option value="">Cuisine (optional)</option>
+                ${CUISINES.map(c => `<option value="${c}" ${state.addCuisine===c?'selected':''}>${c}</option>`).join('')}
+              </select>
+              <select id="addPrice" onchange="state.addPrice=+this.value; render()" style="padding:10px;border-radius:8px;border:1px solid #ddd;flex:1">
+                ${[1,2,3,4].map(p => `<option value="${p}" ${state.addPrice===p?'selected':''}>${PRICE_LABELS[p-1]} Price</option>`).join('')}
+              </select>
+            </div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.95rem"><input type="checkbox" ${state.addVerifiedVisit?'checked':''} onchange="state.addVerifiedVisit=this.checked; render()"> ✓ Verified visit</label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.95rem"><input type="checkbox" ${state.addWouldGoAgain?'checked':''} onchange="state.addWouldGoAgain=this.checked; render()"> 🔄 Would go again</label>
+            </div>
+            <div class="add-review-photos">
+              <label class="photo-upload-btn"><input type="file" accept="image/*" multiple onchange="handlePhotoUpload(this)" style="display:none">📷 Add photos</label>
+              ${(state.addPhotos||[]).map((p,i)=>`<span class="photo-preview"><img src="${p}" alt=""><button type="button" onclick="state.addPhotos.splice(${i},1); render()">×</button></span>`).join('')}
+            </div>
+            <textarea class="add-review-textarea" placeholder="Write your review..." oninput="state.reviewText=this.value">${(state.reviewText||'').replace(/</g,'&lt;')}</textarea>
+            <button class="add-review-submit" onclick="addReview()">${isEditing ? 'Update Review' : 'Post Review'}</button>
+            ${isEditing ? `<button class="add-review-cancel" onclick="cancelEdit()">Cancel</button>` : ''}
+          </div>
+        `;
+      } else if (state.tab === 'map' && state.panel === 'main') {
+        const total = state.reviews.length;
+        const l1 = state.reviews.filter(r=>getEffectiveLevel(r)===1).length;
+        const l2 = state.reviews.filter(r=>getEffectiveLevel(r)===2).length;
+        mainContent = `
+          <div class="main">
+            <div class="map-search"><input type="text" id="mapSearchInput" placeholder="Search restaurant or location..." value="${(state.mapSearch||'').replace(/"/g,'&quot;')}" oninput="updateMapSearch()"></div>
+            <div class="map-filters">
+              <button class="filter-btn ${state.mapFilter==='all'?'filter-active':''}" onclick="filterMap('all')">📍 Total (${total})</button>
+              <button class="filter-btn ${state.mapFilter==='1'?'filter-active':''}" onclick="filterMap('1')">📍 1st Level (${l1})</button>
+              <button class="filter-btn ${state.mapFilter==='2'?'filter-active':''}" onclick="filterMap('2')">📍 2nd Level (${l2})</button>
+            </div>
+            <div class="feed-filters" style="margin-top:8px">
+              <select onchange="state.mapCuisine=this.value; filterMap(state.mapFilter)" style="padding:8px;border-radius:8px;border:1px solid #ddd">
+                <option value="">All cuisines</option>${CUISINES.map(c=>`<option value="${c}" ${state.mapCuisine===c?'selected':''}>${c}</option>`).join('')}
+              </select>
+              <select onchange="state.mapPrice=this.value; filterMap(state.mapFilter)" style="padding:8px;border-radius:8px;border:1px solid #ddd">
+                <option value="">Any price</option>${[1,2,3,4].map(p=>`<option value="${p}" ${state.mapPrice==p?'selected':''}>Up to ${PRICE_LABELS[p-1]}</option>`).join('')}
+              </select>
+            </div>
+            <div id="map-container"></div>
+            <div class="map-legend">
+              <span><span class="map-legend-dot" style="background:#006CE0"></span> 1st level</span>
+              <span><span class="map-legend-dot" style="background:#FF8D00"></span> 2nd level</span>
+              <span><span class="map-legend-dot" style="background:#e31919"></span> Your review</span>
+            </div>
+          </div>
+        `;
+      } else {
+        mainContent = '<div class="main"></div>';
+      }
+
+      const sidebarHtml = state.user && state.menuOpen ? `
+        <div class="menu-overlay" onclick="closeMenu()"></div>
+        <div class="menu-sidebar">
+          <div class="menu-sidebar-header">
+            <div class="menu-sidebar-avatar" style="${(state.profiles[state.user.displayName]?.avatar) ? 'background-image:url('+state.profiles[state.user.displayName].avatar+');background-size:cover;background-position:center' : ''}">${state.profiles[state.user.displayName]?.avatar ? '' : getInitials(state.user.displayName)}</div>
+            <div class="menu-sidebar-name">${state.user.displayName || 'User'}</div>
+          </div>
+          <nav class="menu-sidebar-nav">
+            <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='main'; state.tab='feed'; render()">Feed</button>
+            <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='editprofile'; render()">Edit Profile</button>
+            <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='myreviews'; render()">My Reviews</button>
+            <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='saved'; render()">Saved (${state.saved.length})</button>
+            <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='network'; render()">Network ${getPendingRequestsForMe().length ? `(${getPendingRequestsForMe().length})` : ''}</button>
+            <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='notifications'; render()">Notifications ${state.notifications.filter(n=>(!n.recipient||n.recipient===state.user?.displayName)&&!n.read).length ? `(${state.notifications.filter(n=>(!n.recipient||n.recipient===state.user?.displayName)&&!n.read).length})` : ''}</button>
+            <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='feedback'; render()">Feedback</button>
+            <button class="menu-sidebar-item" onclick="closeMenu(); logout()">Logout</button>
+            <button class="menu-sidebar-item" onclick="closeMenu(); clearAllData()">Clear all data</button>
+          </nav>
+        </div>
+      ` : '';
+      app.innerHTML = `
+        <div class="top-bar">
+          <div class="header">
+            <button class="menu-btn" onclick="openMenu()">☰</button>
+            <h1 class="logo">Foodie</h1>
+          </div>
+          <nav class="tabs">
+            <button class="tab ${state.tab==='feed'?'active':''}" onclick="setTab('feed')">📋 Feed</button>
+            <button class="tab ${state.tab==='add'?'active':''}" onclick="setTab('add')">➕ Add</button>
+            <button class="tab ${state.tab==='map'?'active':''}" onclick="setTab('map')">📍 Map</button>
+          </nav>
+        </div>
+        ${sidebarHtml}
+        <main id="main" class="app-content" role="main">
+          <div class="app-content-inner">${mainContent}</div>
+          <aside class="ad-strip" aria-label="Advertisement">
+            <div class="ad-slot">
+              <div class="ad-slot-label">Sponsored</div>
+              <div class="ad-slot-placeholder">Ad space 300×250</div>
+              <div style="margin-top:12px;font-size:0.75rem;color:#999">Replace with your ad code</div>
+            </div>
+            <div class="ad-slot">
+              <div class="ad-slot-label">Sponsored</div>
+              <div class="ad-slot-placeholder">Ad space 300×600</div>
+              <div style="margin-top:12px;font-size:0.75rem;color:#999">Replace with your ad code</div>
+            </div>
+          </aside>
+        </main>
+      `;
+    }
+
+    let map = null;
+    let markers = [];
+    let markerCluster = null;
+
+    function login(name) { state.user = { displayName: name || 'Demo User' }; saveToStorage(); render(); }
+    function logout() {
+      state.user = null;
+      localStorage.removeItem(STORAGE_KEYS.user);
+      render();
+    }
+    function clearAllData() {
+      state.user = null;
+      state.reviews = DEFAULT_REVIEWS.map(r => ({ ...r, cuisine: r.cuisine || 'Various', price: r.price || 2, verifiedVisit: r.verifiedVisit, wouldGoAgain: r.wouldGoAgain !== false }));
+      state.comments = {}; state.connections = {}; state.connectionRequests = []; state.saved = []; state.notifications = []; state.profiles = {}; state.privateNotes = {}; state.groupLists = {}; state.trustScores = {};
+      Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
+      render();
+    }
+    function setTab(t) { state.tab = t; state.panel = 'main'; if (t !== 'add') state.editingReview = null; render(); if (t === 'map') setTimeout(initMap, 50); }
+    function filterMap(f) { state.mapFilter = f; render(); setTimeout(function(){ if (state.tab === 'map') initMap(); }, 50); }
+    function setRating(n) { state.rating = n; render(); }
+
+    function initMap() {
+      const el = document.getElementById('map-container');
+      if (!el) return;
+      if (typeof L === 'undefined') { setTimeout(initMap, 100); return; }
+      try { if (map) map.remove(); } catch (e) {}
+      map = null; markers = [];
+      const restaurants = getMapRestaurants();
+      const q = (state.mapSearch || '').toLowerCase().trim();
+      const filtered = q ? restaurants.filter(r => (r.name||'').toLowerCase().includes(q)) : restaurants;
+      const toShow = filtered.length ? filtered : restaurants;
+      const center = toShow.length ? [toShow[0].lat, toShow[0].lng] : [37.37, -122.03];
+      map = L.map('map-container').setView(center, 10);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+      const levelColors = { 1: '#006CE0', 2: '#FF8D00', 3: '#e31919' };
+      if (typeof L !== 'undefined' && L.markerClusterGroup) {
+        if (markerCluster) map.removeLayer(markerCluster);
+        markerCluster = L.markerClusterGroup();
+        toShow.forEach(r => {
+          const color = levelColors[r.level] || levelColors[2];
+          const icon = L.divIcon({
+            className: 'map-marker',
+            html: `<div style="background:${color};width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3)"></div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+          const m = L.marker([r.lat, r.lng], { icon }).bindPopup(`<strong>${r.name}</strong><br><span style="color:${color}">● ${r.level===1?'1st level':r.level===2?'2nd level':'Your review'}</span><br><button onclick="window.viewRestaurantDetail('${(r.name||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="margin-top:6px;padding:6px 12px;background:#0a66c2;color:white;border:none;border-radius:6px;cursor:pointer">View details</button>`);
+          markerCluster.addLayer(m);
+          markers.push(m);
+        });
+        map.addLayer(markerCluster);
+      } else {
+        toShow.forEach(r => {
+          const color = levelColors[r.level] || levelColors[2];
+          const icon = L.divIcon({
+            className: 'map-marker',
+            html: `<div style="background:${color};width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3)"></div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+          const m = L.marker([r.lat, r.lng], { icon }).addTo(map).bindPopup(`<strong>${r.name}</strong><br><span style="color:${color}">● ${r.level===1?'1st level':r.level===2?'2nd level':'Your review'}</span>`);
+          markers.push(m);
+        });
+      }
+      if (toShow.length === 1) map.setView([toShow[0].lat, toShow[0].lng], 15);
+      else if (toShow.length > 1) {
+        const bounds = L.latLngBounds(toShow.map(r => [r.lat, r.lng]));
+        map.fitBounds(bounds, { padding: [20, 20], maxZoom: 15 });
+      }
+    }
+
+    function zoomMapToSearch() {
+      if (state.tab !== 'map' || !map) return;
+      initMap();
+    }
+
+    function handleDeepLink() {
+      const params = new URLSearchParams(location.search);
+      const reviewId = params.get('review');
+      if (reviewId && state.user) {
+        const r = state.reviews.find(x => x.id === reviewId);
+        if (r) {
+          state.tab = 'feed';
+          state.panel = 'main';
+          render();
+          setTimeout(() => {
+            const el = document.querySelector('[data-review-id="' + reviewId + '"]');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 300);
+        }
+      }
+    }
+
+    window.viewRestaurantDetail = viewRestaurantDetail;
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+    render();
+    handleDeepLink();
+    window.addEventListener('popstate', () => { const p = new URLSearchParams(location.search); if (p.get('review')) handleDeepLink(); });
+  </script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js" crossorigin=""></script>
+</body>
+</html>

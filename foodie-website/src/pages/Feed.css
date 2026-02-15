@@ -1,0 +1,61 @@
+.feed-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.feed-loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
+}
+
+.review-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.review-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--secondary-light);
+}
+
+.review-restaurant {
+  flex: 1;
+  font-weight: 600;
+  color: var(--primary);
+  font-size: 1.1rem;
+}
+
+.review-date { font-size: 0.85rem; color: var(--text-muted); }
+.review-level { font-size: 1.1rem; }
+
+.review-card-body {
+  padding: 16px;
+}
+
+.review-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.review-by { color: var(--accent-blue); font-weight: 500; }
+.review-rating { color: var(--primary); font-size: 1.1rem; }
+
+.review-text {
+  line-height: 1.5;
+  color: var(--text-dark);
+}
+
+.wheelchair-icon {
+  float: right;
+  font-size: 1.2rem;
+  margin-top: 8px;
+}
