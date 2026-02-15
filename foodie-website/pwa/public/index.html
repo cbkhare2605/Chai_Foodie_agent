@@ -388,6 +388,24 @@
       handleDeepLink();
     }
 
+    async function refreshFeed() {
+      if (!window.FOODIE_API?.enabled || !state.user) return;
+      try {
+        const stored = await window.FOODIE_API.loadData();
+        state.reviews = stored.reviews || [];
+        state.comments = stored.comments || {};
+        state.connections = stored.connections || {};
+        state.connectionRequests = stored.connectionRequests || [];
+        state.saved = stored.saved || [];
+        state.notifications = stored.notifications || [];
+        state.profiles = stored.profiles || {};
+        state.privateNotes = stored.privateNotes || {};
+        state.groupLists = stored.groupLists || {};
+        state.trustScores = stored.trustScores || {};
+        render();
+      } catch (e) { console.warn('Refresh failed', e); }
+    }
+
     let searchTimer = null;
     async function nominatimSearch(query, viewbox) {
       let url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=10';
@@ -1022,7 +1040,7 @@
           }
           const updated = { ...state.reviews[idx], text: text.trim(), rating: state.rating, restaurant: place.name, lat: place.lat, lng: place.lng, cuisine: state.addCuisine || 'Various', price: state.addPrice || 2, photos: (state.addPhotos || []).filter(isSafePhotoUrl), verifiedVisit: state.addVerifiedVisit, wouldGoAgain: state.addWouldGoAgain };
           state.reviews[idx] = updated;
-          if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.saveReview(updated); } catch (e) { console.warn(e); } } else saveToStorage();
+          if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.saveReview(updated); } catch (e) { alert('Could not save: ' + (e.message || 'Please try again.')); render(); return; } } else saveToStorage();
         }
         cancelEdit();
         return;
@@ -1061,7 +1079,13 @@
       state.editingReview = null;
       state.addCuisine = ''; state.addPrice = 2; state.addPhotos = []; state.addVerifiedVisit = false; state.addWouldGoAgain = true;
       const newReview = state.reviews[0];
-      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.saveReview(newReview); } catch (e) { console.warn(e); } } else saveToStorage();
+      if (window.FOODIE_API?.enabled) {
+        try { await window.FOODIE_API.saveReview(newReview); } catch (e) {
+          state.reviews.shift();
+          alert('Could not save review: ' + (e.message || 'Please check your connection and try again.'));
+          render(); return;
+        }
+      } else saveToStorage();
       setTab('feed');
     }
 
@@ -1464,7 +1488,7 @@
       } else if (state.tab === 'feed' || state.panel === 'myreviews') {
         mainContent = '<div class="main">' +
           (state.panel === 'myreviews' ? `<div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>` : '') +
-          (state.panel === 'main' ? `<div class="feed-search"><input type="text" id="feedSearchInput" placeholder="Search reviews, restaurants, or people..." value="${(state.feedSearch||'').replace(/"/g,'&quot;')}" oninput="state.feedSearch=this.value; updateFeedCards()"></div>
+          (state.panel === 'main' ? `<div class="feed-search" style="display:flex;gap:8px;align-items:center"><input type="text" id="feedSearchInput" placeholder="Search reviews, restaurants, or people..." value="${(state.feedSearch||'').replace(/"/g,'&quot;')}" oninput="state.feedSearch=this.value; updateFeedCards()" style="flex:1">${window.FOODIE_API?.enabled ? `<button onclick="refreshFeed()" title="Refresh from server" style="padding:10px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1.1rem">↻</button>` : ''}</div>
             <div class="feed-filters">
               <select onchange="state.feedCuisine=this.value; updateFeedCards()" style="padding:8px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem">
                 <option value="">All cuisines</option>${CUISINES.map(c=>`<option value="${c}" ${state.feedCuisine===c?'selected':''}>${c}</option>`).join('')}

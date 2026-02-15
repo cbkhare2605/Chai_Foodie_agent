@@ -172,9 +172,9 @@
 
   async function saveReview(review) {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) throw new Error('Not signed in');
     const photos = (review.photos || []).filter(p => typeof p === 'string' && p.startsWith('data:image'));
-    await supabase.from('reviews').upsert({
+    const { error } = await supabase.from('reviews').upsert({
       id: review.id,
       user_id: user.id,
       restaurant: review.restaurant,
@@ -190,6 +190,7 @@
       likes: review.likes || 0,
       created_at: review.date
     }, { onConflict: 'id' });
+    if (error) throw error;
   }
 
   async function deleteReview(id) {
