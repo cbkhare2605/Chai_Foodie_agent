@@ -105,6 +105,25 @@
     .add-review-meta { display: flex; gap: 12px; margin-bottom: 12px; }
     .add-review-photos { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
     .photo-upload-btn { padding: 10px 16px; background: #f3f2ef; border-radius: 8px; cursor: pointer; font-size: 0.95rem; }
+    .photo-add-sheet { position: relative; }
+    .photo-add-sheet-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 199; }
+    .photo-add-sheet-menu { display: none; position: absolute; left: 0; top: 100%; margin-top: 4px; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 8px; min-width: 220px; z-index: 200; }
+    .photo-add-sheet-menu.show { display: block; }
+    .photo-add-sheet-backdrop.show { display: block; }
+    .photo-add-sheet-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; border: none; background: none; cursor: pointer; font-size: 1rem; text-align: left; border-radius: 8px; }
+    .photo-add-sheet-item:hover { background: #f5f5f5; }
+    .camera-modal-overlay { display: none; position: fixed; inset: 0; background: #000; z-index: 300; flex-direction: column; align-items: center; justify-content: center; }
+    .camera-modal-overlay.show { display: flex; }
+    .camera-modal-overlay video { max-width: 100%; max-height: 70vh; object-fit: contain; background: #111; }
+    .camera-modal-overlay .camera-controls { display: flex; gap: 16px; margin-top: 16px; }
+    .camera-modal-overlay .camera-btn { padding: 14px 28px; font-size: 1.1rem; border: none; border-radius: 28px; cursor: pointer; font-weight: 600; }
+    .camera-capture-btn { background: #e31919; color: white; }
+    .camera-close-btn { background: #333; color: white; }
+    .camera-modal-overlay .camera-error { color: #fff; padding: 20px; text-align: center; }
+    @media (max-width: 600px) {
+      .photo-add-sheet-menu { position: fixed; left: 0; right: 0; bottom: 0; top: auto; margin: 0; border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom, 0); max-height: 40vh; }
+      .photo-add-sheet-menu .photo-add-sheet-item { padding: 16px 20px; font-size: 1.05rem; }
+    }
     .photo-preview { position: relative; }
     .photo-preview img { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; }
     .photo-preview button { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: #e31919; color: white; border: none; cursor: pointer; font-size: 14px; line-height: 1; }
@@ -153,6 +172,14 @@
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
   <div id="app" role="application" aria-label="Foodie app"></div>
+  <div id="cameraModal" class="camera-modal-overlay" aria-label="Camera capture" role="dialog">
+    <video id="cameraVideo" autoplay playsinline muted></video>
+    <div class="camera-controls">
+      <button type="button" class="camera-btn camera-capture-btn" id="cameraCaptureBtn" onclick="captureFromCamera()">Capture</button>
+      <button type="button" class="camera-btn camera-close-btn" onclick="closeCameraCapture()">Cancel</button>
+    </div>
+    <div id="cameraError" class="camera-error" style="display:none"></div>
+  </div>
   <script>
     function formatDate(ts) {
       const sec = (Date.now() - ts) / 1000, m = sec/60, h = m/60, d = h/24;
@@ -179,6 +206,16 @@
     const CUISINES = ['Indian', 'Japanese', 'French', 'Italian', 'Mexican', 'American', 'Chinese', 'Korean', 'Thai', 'British', 'Nordic', 'Spanish', 'Peruvian', 'Australian', 'Various'];
     const PRICE_LABELS = ['$', '$$', '$$$', '$$$$'];
     const PHOTOS_BASE = 'photos/';
+    const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const PHOTO_MAX_SIZE = 300000;
+    const PHOTO_MAX_DIM = 2000;
+    const NSFW_PORN_THRESHOLD = 0.5;
+    const NSFW_HENTAI_THRESHOLD = 0.5;
+    const NSFW_SEXY_THRESHOLD = 0.85;
+    const MAX_REVIEW_TEXT = 2000;
+    const MAX_DISPLAY_NAME = 50;
+    const MAX_RESTAURANT_NAME = 100;
+    const MAX_COMMENT_TEXT = 500;
     const DEFAULT_REVIEWS = [
       { id: 'k1', restaurant: 'Paradise Biryani, Pune', lat: 18.52, lng: 73.85, by: 'Kalyani', text: 'Amazing biryani! Authentic Hyderabad style.', rating: 5, date: Date.now() - 86400000*2, level: 1, likes: 4, liked: false, cuisine: 'Indian', price: 2, photoFile: 'photo1.jpg', verifiedVisit: true, wouldGoAgain: true },
       { id: 'k2', restaurant: 'The Ivy, London', lat: 51.51, lng: -0.14, by: 'Kalyani', text: 'Classic British dining. The shepherd\'s pie is divine.', rating: 5, date: Date.now() - 86400000*5, level: 1, likes: 2, liked: false, cuisine: 'British', price: 4, photoFile: 'photo2.jpg' },
@@ -322,12 +359,28 @@
     };
 
     let searchTimer = null;
-    async function nominatimSearch(query) {
-      const res = await fetch(
-        'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=5',
-        { headers: { 'Accept': 'application/json', 'User-Agent': 'FoodieApp/1.0' } }
-      );
+    async function nominatimSearch(query, viewbox) {
+      let url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=10';
+      if (viewbox) url += '&viewbox=' + viewbox + '&bounded=0';
+      const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'FoodieApp/1.0' } });
       return res.json();
+    }
+
+    function requestUserLocationIfNeeded() {
+      if (state.userLocation || !navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(
+        function(pos) { state.userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+        function() {},
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
+      );
+    }
+
+    function queryLooksLikeDifferentLocation(q) {
+      var trimmed = (q || '').trim();
+      var commaIdx = trimmed.lastIndexOf(',');
+      if (commaIdx < 0) return false;
+      var afterComma = trimmed.slice(commaIdx + 1).trim();
+      return afterComma.length >= 2 && !/^\d+/.test(afterComma);
     }
 
     function searchRestaurants(q) {
@@ -336,13 +389,22 @@
       clearTimeout(searchTimer);
       searchTimer = setTimeout(async () => {
         try {
-          let data = await nominatimSearch(q);
-          if (!data || data.length === 0) data = await nominatimSearch(q + ', USA');
-          if (!data || data.length === 0) data = await nominatimSearch(q + ' restaurant');
-          if (!data || data.length === 0) data = await nominatimSearch(q + ', California');
-          state.searchResults = (data && data.length) ? data.map(p => ({ name: p.display_name, lat: parseFloat(p.lat), lng: parseFloat(p.lon) })) : [{ name: q, lat: 37.37, lng: -122.03 }];
+          var viewbox = null;
+          if (state.userLocation && !queryLooksLikeDifferentLocation(q)) {
+            var r = 0.15;
+            var left = state.userLocation.lng - r;
+            var top = state.userLocation.lat + r;
+            var right = state.userLocation.lng + r;
+            var bottom = state.userLocation.lat - r;
+            viewbox = left + ',' + top + ',' + right + ',' + bottom;
+          }
+          let data = await nominatimSearch(q, viewbox);
+          if (!data || data.length === 0) data = await nominatimSearch(q + ' restaurant', viewbox);
+          if (!data || data.length === 0 && !viewbox) data = await nominatimSearch(q + ', USA');
+          if (!data || data.length === 0 && !viewbox) data = await nominatimSearch(q + ', California');
+          state.searchResults = (data && data.length) ? data.map(p => ({ name: p.display_name, lat: parseFloat(p.lat), lng: parseFloat(p.lon) })).slice(0, 8) : [{ name: q, lat: state.userLocation ? state.userLocation.lat : 37.37, lng: state.userLocation ? state.userLocation.lng : -122.03 }];
         } catch (e) {
-          state.searchResults = [{ name: q, lat: 37.37, lng: -122.03 }];
+          state.searchResults = [{ name: q, lat: state.userLocation ? state.userLocation.lat : 37.37, lng: state.userLocation ? state.userLocation.lng : -122.03 }];
         }
         updateAddReviewSearchResults();
       }, 300);
@@ -369,7 +431,7 @@
         el.className = 'search-results';
         el.style.display = 'block';
         el.innerHTML = state.searchResults.map((p, i) =>
-          `<div class="search-result-item" onclick="selectPlaceByIndex(${i})">${p.name}</div>`
+          `<div class="search-result-item" onclick="selectPlaceByIndex(${i})">${escapeHtml(p.name)}</div>`
         ).join('');
       }
     }
@@ -400,9 +462,10 @@
       return (state.comments[reviewId] || []).slice();
     }
     function addComment(reviewId, text) {
-      if (!text || !text.trim()) return;
+      const t = (text || '').trim().slice(0, MAX_COMMENT_TEXT);
+      if (!t) return;
       if (!state.comments[reviewId]) state.comments[reviewId] = [];
-      state.comments[reviewId].push({ id: Date.now().toString(), by: state.user.displayName, text: text.trim(), date: Date.now() });
+      state.comments[reviewId].push({ id: Date.now().toString(), by: state.user.displayName, text: t, date: Date.now() });
       const r = state.reviews.find(x => x.id === reviewId);
       if (r && r.by !== state.user.displayName) {
         state.notifications.push({ id: Date.now().toString(), type: 'comment', text: `${state.user.displayName} commented on your review of ${r.restaurant}`, read: false, date: Date.now() });
@@ -567,13 +630,35 @@
       return (state.connectionRequests || []).some(r => r.from === state.user?.displayName && r.to === name && r.status === 'pending');
     }
 
+    function isSafePhotoUrl(url) {
+      if (!url || typeof url !== 'string') return false;
+      const u = url.trim();
+      if (u.startsWith('data:image/')) {
+        const m = u.match(/^data:(image\/(jpeg|png|gif|webp));base64,/i);
+        return !!m;
+      }
+      if (u.startsWith(PHOTOS_BASE) && /^photos\/[a-zA-Z0-9_.-]+\.(jpg|jpeg|png|gif|webp)$/i.test(u)) return true;
+      return false;
+    }
+    function getSafeAvatarUrl(prof) {
+      const url = prof?.avatar;
+      return url && isSafePhotoUrl(url) ? url : '';
+    }
+    function escapeHtml(s) {
+      if (s == null || s === '') return '';
+      const t = String(s);
+      return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
     function getInitials(name) {
       return (name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     }
 
     function getReviewPhotoUrls(r) {
-      if (r.photos && r.photos.length > 0) return r.photos;
-      if (r.photoFile) return [PHOTOS_BASE + r.photoFile];
+      if (r.photos && r.photos.length > 0) return r.photos.filter(isSafePhotoUrl);
+      if (r.photoFile) {
+        const u = PHOTOS_BASE + r.photoFile;
+        return isSafePhotoUrl(u) ? [u] : [];
+      }
       return [];
     }
 
@@ -665,56 +750,199 @@
     function handleProfilePhoto(input) {
       const f = input?.files?.[0];
       if (!f) return;
+      if (!ALLOWED_IMAGE_TYPES.includes(f.type) || f.type === 'image/svg+xml') return;
       const r = new FileReader();
       r.onload = function() {
-        let d = r.result;
-        if (d.length > 100000) {
-          const img = new Image();
-          img.onload = function() {
-            const c = document.createElement('canvas');
-            c.width = Math.min(200, img.width); c.height = Math.min(200, img.height);
-            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-            d = c.toDataURL('image/jpeg', 0.7);
+        const d = r.result;
+        processImageToSafeDataUrl(d, 100000, 500, function(safeUrl) {
+          if (safeUrl) {
             const uid = state.user?.displayName;
-            if (uid) { if (!state.profiles[uid]) state.profiles[uid] = {}; state.profiles[uid].avatar = d; saveToStorage(); render(); }
-          };
-          img.src = d;
-        } else {
-          const uid = state.user?.displayName;
-          if (uid) { if (!state.profiles[uid]) state.profiles[uid] = {}; state.profiles[uid].avatar = d; saveToStorage(); render(); }
-        }
+            if (uid) { if (!state.profiles[uid]) state.profiles[uid] = {}; state.profiles[uid].avatar = safeUrl; saveToStorage(); render(); }
+          }
+        });
       };
       r.readAsDataURL(f);
       input.value = '';
     }
 
+    let nsfwModelPromise = null;
+    function loadNsfwModel() {
+      if (nsfwModelPromise) return nsfwModelPromise;
+      nsfwModelPromise = new Promise(function(resolve) {
+        if (typeof nsfwjs !== 'undefined') {
+          nsfwjs.load().then(resolve).catch(function() { resolve(null); });
+          return;
+        }
+        const tfScript = document.createElement('script');
+        tfScript.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0';
+        tfScript.onload = function() {
+          const nsfw = document.createElement('script');
+          nsfw.src = 'https://cdn.jsdelivr.net/npm/nsfwjs@2.4.2/dist/nsfwjs.min.js';
+          nsfw.onload = function() {
+            if (typeof tf !== 'undefined' && tf.enableProdMode) try { tf.enableProdMode(); } catch (e) {}
+            nsfwjs.load().then(resolve).catch(function() { resolve(null); });
+          };
+          nsfw.onerror = function() { resolve(null); };
+          document.head.appendChild(nsfw);
+        };
+        tfScript.onerror = function() { resolve(null); };
+        document.head.appendChild(tfScript);
+      });
+      return nsfwModelPromise;
+    }
+    function isImageAppropriate(img, cb) {
+      loadNsfwModel().then(function(model) {
+        if (!model) { cb(true); return; }
+        model.classify(img).then(function(predictions) {
+          const byClass = {};
+          predictions.forEach(function(p) { byClass[p.className] = p.probability; });
+          const porn = byClass.Porn || 0, hentai = byClass.Hentai || 0, sexy = byClass.Sexy || 0;
+          const ok = porn < NSFW_PORN_THRESHOLD && hentai < NSFW_HENTAI_THRESHOLD && sexy < NSFW_SEXY_THRESHOLD;
+          cb(ok);
+        }).catch(function() { cb(true); });
+      }).catch(function() { cb(true); });
+    }
+    function processImageToSafeDataUrl(data, maxSize, maxDim, cb) {
+      if (!data || typeof data !== 'string' || !data.startsWith('data:image/')) { cb(null); return; }
+      const m = data.match(/^data:(image\/(jpeg|png|gif|webp));base64,/i);
+      if (!m) { cb(null); return; }
+      const img = new Image();
+      img.onerror = function() { cb(null); };
+      img.onload = function() {
+        isImageAppropriate(img, function(ok) {
+          if (!ok) { try { alert('This photo appears to contain inappropriate content and cannot be uploaded.'); } catch (e) {} cb(null); return; }
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            const s = Math.min(1, maxDim / Math.max(w, h));
+            w = Math.round(w * s); h = Math.round(h * s);
+          }
+          let scale = 1;
+          if (w * h > 0) {
+            const targetPx = maxSize / 0.5;
+            if (w * h > targetPx) scale = Math.sqrt(targetPx / (w * h));
+          }
+          w = Math.max(1, Math.round(w * scale)); h = Math.max(1, Math.round(h * scale));
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          const out = c.toDataURL('image/jpeg', 0.8);
+          cb(out.length <= maxSize * 1.2 ? out : c.toDataURL('image/jpeg', 0.6));
+        });
+      };
+      img.src = data;
+    }
+    function togglePhotoAddSheet() {
+      const menu = document.getElementById('photoAddMenu');
+      const backdrop = document.getElementById('photoAddBackdrop');
+      if (!menu || !backdrop) return;
+      const open = menu.classList.contains('show');
+      menu.classList.toggle('show', !open);
+      backdrop.classList.toggle('show', !open);
+    }
+    function closePhotoAddSheet() {
+      const menu = document.getElementById('photoAddMenu');
+      const backdrop = document.getElementById('photoAddBackdrop');
+      if (menu) menu.classList.remove('show', 'show-mobile');
+      if (backdrop) backdrop.classList.remove('show');
+    }
+    let cameraStream = null;
+    async function openCameraCapture(ev) {
+      if (!window.isSecureContext) {
+        closePhotoAddSheet();
+        const modal = document.getElementById('cameraModal');
+        const errEl = document.getElementById('cameraError');
+        if (modal && errEl) {
+          errEl.innerHTML = 'Camera requires HTTPS or localhost. Open this app at <strong>http://localhost:8080</strong> (run: npm run dev:pwa in foodie-website folder).';
+          errEl.style.display = 'block';
+          document.getElementById('cameraCaptureBtn').disabled = false;
+          modal.classList.add('show');
+        }
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        closePhotoAddSheet();
+        const modal = document.getElementById('cameraModal');
+        const errEl = document.getElementById('cameraError');
+        if (modal && errEl) {
+          errEl.textContent = 'Camera not supported. Use "Choose from Library" instead.';
+          errEl.style.display = 'block';
+          document.getElementById('cameraCaptureBtn').disabled = false;
+          modal.classList.add('show');
+        }
+        return;
+      }
+      var gumPromise = navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      closePhotoAddSheet();
+      const modal = document.getElementById('cameraModal');
+      const video = document.getElementById('cameraVideo');
+      const errEl = document.getElementById('cameraError');
+      const captureBtn = document.getElementById('cameraCaptureBtn');
+      if (!modal || !video || !errEl) return;
+      errEl.style.display = 'none';
+      errEl.textContent = '';
+      captureBtn.disabled = true;
+      modal.classList.add('show');
+      try {
+        cameraStream = await gumPromise;
+        video.srcObject = cameraStream;
+        captureBtn.disabled = false;
+      } catch (e) {
+        var msg = 'Camera access denied or unavailable. ';
+        if (/Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)) {
+          msg += 'In Safari: Settings > Websites > Camera — set this site to "Ask" or "Allow", then try again.';
+        } else {
+          msg += 'Please allow camera permission when prompted and try again.';
+        }
+        errEl.innerHTML = msg + ' <button type="button" class="camera-btn camera-close-btn" style="margin-top:12px" onclick="openCameraCapture(event)">Retry</button>';
+        errEl.style.display = 'block';
+        captureBtn.disabled = false;
+      }
+    }
+    function closeCameraCapture() {
+      const modal = document.getElementById('cameraModal');
+      const video = document.getElementById('cameraVideo');
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+        cameraStream = null;
+      }
+      if (video) video.srcObject = null;
+      if (modal) modal.classList.remove('show');
+    }
+    function captureFromCamera() {
+      const video = document.getElementById('cameraVideo');
+      if (!video || !video.srcObject || video.readyState < 2) return;
+      const c = document.createElement('canvas');
+      c.width = video.videoWidth;
+      c.height = video.videoHeight;
+      c.getContext('2d').drawImage(video, 0, 0);
+      const dataUrl = c.toDataURL('image/jpeg', 0.9);
+      closeCameraCapture();
+      processImageToSafeDataUrl(dataUrl, PHOTO_MAX_SIZE, PHOTO_MAX_DIM, function(safeUrl) {
+        if (safeUrl && state.addPhotos.length < 4) {
+          state.addPhotos = state.addPhotos || [];
+          state.addPhotos.push(safeUrl);
+          saveToStorage();
+          render();
+        }
+      });
+    }
     function handlePhotoUpload(input) {
       const files = input.files;
       if (!files || !files.length) return;
-      const maxSize = 300000;
       for (let i = 0; i < Math.min(files.length, 4); i++) {
         const f = files[i];
-        if (f.size > maxSize * 2) continue;
+        if (!ALLOWED_IMAGE_TYPES.includes(f.type) || f.type === 'image/svg+xml') continue;
+        if (f.size > PHOTO_MAX_SIZE * 3) continue;
         const r = new FileReader();
         r.onload = function() {
-          let data = r.result;
-          if (data.length > maxSize && data.startsWith('data:image')) {
-            const img = new Image();
-            img.onload = function() {
-              const c = document.createElement('canvas');
-              const scale = Math.min(1, Math.sqrt(maxSize / (img.width * img.height * 0.5)));
-              c.width = img.width * scale; c.height = img.height * scale;
-              c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-              state.addPhotos = state.addPhotos || [];
-              if (state.addPhotos.length < 4) state.addPhotos.push(c.toDataURL('image/jpeg', 0.7));
-              saveToStorage(); render();
-            };
-            img.src = data;
-          } else {
-            state.addPhotos = state.addPhotos || [];
-            if (state.addPhotos.length < 4) state.addPhotos.push(data);
-            saveToStorage(); render();
-          }
+            const data = r.result;
+            processImageToSafeDataUrl(data, PHOTO_MAX_SIZE, PHOTO_MAX_DIM, function(safeUrl) {
+              if (safeUrl && state.addPhotos.length < 4) {
+                state.addPhotos = state.addPhotos || [];
+                state.addPhotos.push(safeUrl);
+                saveToStorage(); render();
+              }
+            });
         };
         r.readAsDataURL(f);
       }
@@ -722,8 +950,9 @@
     }
 
     async function addReview() {
-      const text = (document.querySelector('.add-review-textarea') || {}).value || state.reviewText;
-      if (!text.trim() || state.rating < 1) { alert('Please add a rating and write your review.'); return; }
+      const text = ((document.querySelector('.add-review-textarea') || {}).value || state.reviewText || '').trim();
+      if (!text || state.rating < 1) { alert('Please add a rating and write your review.'); return; }
+      if (text.length > MAX_REVIEW_TEXT) { alert('Review is too long. Please keep it under ' + MAX_REVIEW_TEXT + ' characters.'); return; }
       if (state.editingReview) {
         const idx = state.reviews.findIndex(r => r.id === state.editingReview.id);
         if (idx >= 0) {
@@ -733,7 +962,7 @@
             if (geocoded) place = { name: state.restaurantSearch.trim(), lat: geocoded.lat, lng: geocoded.lng };
             else if (!state.selectedPlace) place = { name: state.restaurantSearch.trim(), lat: state.editingReview.lat, lng: state.editingReview.lng };
           }
-          const updated = { ...state.reviews[idx], text: text.trim(), rating: state.rating, restaurant: place.name, lat: place.lat, lng: place.lng, cuisine: state.addCuisine || 'Various', price: state.addPrice || 2, photos: (state.addPhotos || []).slice(), verifiedVisit: state.addVerifiedVisit, wouldGoAgain: state.addWouldGoAgain };
+          const updated = { ...state.reviews[idx], text: text.trim(), rating: state.rating, restaurant: place.name, lat: place.lat, lng: place.lng, cuisine: state.addCuisine || 'Various', price: state.addPrice || 2, photos: (state.addPhotos || []).filter(isSafePhotoUrl), verifiedVisit: state.addVerifiedVisit, wouldGoAgain: state.addWouldGoAgain };
           state.reviews[idx] = updated;
           saveToStorage();
         }
@@ -748,9 +977,10 @@
         if (geocoded) place = { name: name, lat: geocoded.lat, lng: geocoded.lng };
       }
       if (!place) { alert('Please select a restaurant.'); return; }
+      const restName = (place.name || state.restaurantSearch.trim() || '').slice(0, MAX_RESTAURANT_NAME);
       state.reviews.unshift({
         id: Date.now().toString(),
-        restaurant: place.name || state.restaurantSearch.trim(),
+        restaurant: restName,
         lat: place.lat,
         lng: place.lng,
         by: state.user.displayName,
@@ -762,7 +992,7 @@
         liked: false,
         cuisine: state.addCuisine || 'Various',
         price: state.addPrice || 2,
-        photos: state.addPhotos || [],
+        photos: (state.addPhotos || []).filter(isSafePhotoUrl),
         verifiedVisit: state.addVerifiedVisit,
         wouldGoAgain: state.addWouldGoAgain
       });
@@ -852,10 +1082,10 @@
       return `
         <div class="review-card" data-review-id="${r.id}">
           <div class="review-card-header">
-            <div class="review-avatar ${effLevel===3?'self':''}">${getInitials(r.by)}</div>
+            <div class="review-avatar ${effLevel===3?'self':''}">${escapeHtml(getInitials(r.by))}</div>
             <div class="review-header-meta">
               <div class="review-header-top">
-                <span class="review-by">${r.by}</span>
+                <span class="review-by">${escapeHtml(r.by)}</span>
                 ${canConnectWith(r.by) ? (hasPendingRequestTo(r.by) ? `<button class="connect-btn pending" title="Request sent">+</button>` : `<button class="connect-btn" onclick="sendConnectionRequest('${(r.by||'').replace(/'/g,"\\'")}'); render()" title="Connect">+</button>`) : ''}
                 <span class="review-connection">${getConnectionLabel(effLevel)}</span>
                 ${r.verifiedVisit ? `<span class="badge-verified" title="Verified visit">✓ Verified</span>` : ''}
@@ -864,14 +1094,14 @@
                 ${isOwn ? `<button class="review-edit-btn" onclick="editReviewById('${r.id}')" title="Edit">✏️ Edit</button><button class="review-edit-btn" onclick="deleteReviewById('${r.id}')" title="Delete" style="color:#c62828">🗑️ Delete</button>` : ''}
               </div>
               <div class="review-date">${formatDate(r.date)}</div>
-              <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${r.restaurant}">${(r.restaurant||'').substring(0,60)}${(r.restaurant||'').length>60?'...':''}</div>
+              <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${escapeHtml(r.restaurant)}">${escapeHtml((r.restaurant||'').substring(0,60))}${(r.restaurant||'').length>60?'...':''}</div>
               ${mutualCount > 0 ? `<div class="mutual-connections">${mutualCount} ${mutualCount===1?'friend':'friends'} also reviewed this</div>` : ''}
               ${networkScore && networkScore.count > 0 ? `<div class="network-score" style="font-size:0.8rem;color:#333;margin-top:4px;font-weight:500">Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</div>` : ''}
-              ${(r.cuisine||r.price) ? `<div style="font-size:0.75rem;color:#666;margin-top:2px">${r.cuisine||''} ${PRICE_LABELS[(r.price||2)-1]||''}</div>` : ''}
+              ${(r.cuisine||r.price) ? `<div style="font-size:0.75rem;color:#666;margin-top:2px">${escapeHtml(r.cuisine||'')} ${PRICE_LABELS[(r.price||2)-1]||''}</div>` : ''}
             </div>
           </div>
           <div class="review-card-body">
-            <p class="review-text">${r.text}</p>
+            <p class="review-text">${escapeHtml(r.text)}</p>
             ${(getReviewPhotoUrls(r).length) ? `<div class="review-photos">${getReviewPhotoUrls(r).map(p=>`<img src="${p}" alt="Review photo" onerror="this.style.display='none'">`).join('')}</div>` : ''}
             <div class="review-rating">${'❤️'.repeat(r.rating)}</div>
           </div>
@@ -898,7 +1128,7 @@
             <label style="font-size:0.8rem;color:#666">Private note (only you see):</label>
             <input type="text" value="${(privateNote||'').replace(/"/g,'&quot;')}" placeholder="e.g. Try the lamb biryani" onchange="setPrivateNote('${r.id}',this.value)" style="width:100%;padding:8px;margin-top:4px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem">
           </div>` : ''}
-          ${comments.length ? `<div class="review-comments">${comments.map(c=>`<div class="comment-item" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><strong>${c.by}:</strong>${canConnectWith(c.by) ? (hasPendingRequestTo(c.by) ? `<button class="connect-btn pending" title="Request sent">+</button>` : `<button class="connect-btn" onclick="sendConnectionRequest('${(c.by||'').replace(/'/g,"\\'")}'); render()" title="Connect">+</button>`) : ''}<span>${(c.text||'').replace(/</g,'&lt;')}</span></div>`).join('')}</div>` : ''}
+          ${comments.length ? `<div class="review-comments">${comments.map(c=>`<div class="comment-item" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><strong>${escapeHtml(c.by)}:</strong>${canConnectWith(c.by) ? (hasPendingRequestTo(c.by) ? `<button class="connect-btn pending" title="Request sent">+</button>` : `<button class="connect-btn" onclick="sendConnectionRequest('${(c.by||'').replace(/'/g,"\\'")}'); render()" title="Connect">+</button>`) : ''}<span>${escapeHtml(c.text)}</span></div>`).join('')}</div>` : ''}
           <div class="review-comments">
             <div class="comment-form">
               <input type="text" id="commentInput${r.id}" placeholder="Write a comment..." onkeydown="if(event.key==='Enter')addComment('${r.id}',this.value)&&(this.value='')">
@@ -1010,15 +1240,15 @@
           <h2 style="margin-bottom:16px">Edit Profile</h2>
           <div style="text-align:center;margin-bottom:16px">
             <label style="cursor:pointer;display:inline-block">
-              <div class="menu-sidebar-avatar" style="margin:0 auto;background-image:url(${prof.avatar||''});background-size:cover;background-position:center">${prof.avatar ? '' : getInitials(uid)}</div>
+              <div class="menu-sidebar-avatar" style="margin:0 auto;background-image:url(${getSafeAvatarUrl(prof)||''});background-size:cover;background-position:center">${getSafeAvatarUrl(prof) ? '' : getInitials(uid)}</div>
               <input type="file" accept="image/*" onchange="handleProfilePhoto(this)" style="display:none">
               <div style="font-size:0.8rem;color:#666;margin-top:4px">Tap to change photo</div>
             </label>
           </div>
-          <input type="text" placeholder="Name" value="${(uid||'').replace(/"/g,'&quot;')}" id="profileName" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px">
+          <input type="text" placeholder="Name" value="${(uid||'').replace(/"/g,'&quot;')}" id="profileName" maxlength="${MAX_DISPLAY_NAME}" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px">
           <textarea placeholder="Bio (optional)" id="profileBio" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px;min-height:80px;resize:vertical">${(prof.bio||'').replace(/</g,'&lt;')}</textarea>
           <div style="display:flex;gap:16px;margin-bottom:16px;color:#666;font-size:0.9rem"><span>📝 ${myReviews} reviews</span><span>🔖 ${state.saved.length} saved</span></div>
-          <button onclick="var old=state.user.displayName; state.user.displayName=document.getElementById('profileName').value; var p=state.profiles[state.user.displayName]||state.profiles[old]||{}; p.bio=document.getElementById('profileBio').value; if(state.profiles[old]?.avatar) p.avatar=state.profiles[old].avatar; state.profiles[state.user.displayName]=p; if(old!==state.user.displayName) delete state.profiles[old]; saveToStorage(); state.panel='main'; render()" style="padding:12px 24px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">Save</button>
+          <button onclick="var old=state.user.displayName; var newName=(document.getElementById('profileName').value||'').trim().slice(0,${MAX_DISPLAY_NAME}); state.user.displayName=newName||old; var p=state.profiles[state.user.displayName]||state.profiles[old]||{}; p.bio=(document.getElementById('profileBio').value||'').slice(0,500); if(state.profiles[old]?.avatar) p.avatar=state.profiles[old].avatar; state.profiles[state.user.displayName]=p; if(old!==state.user.displayName) delete state.profiles[old]; saveToStorage(); state.panel='main'; render()" style="padding:12px 24px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">Save</button>
           <button onclick="state.panel='main'; render()" style="padding:12px 24px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer;margin-left:8px">Cancel</button>
         </div></div>`;
       } else if (state.panel === 'saved') {
@@ -1063,7 +1293,7 @@
               <div style="display:flex;align-items:center;gap:12px">
                 <div class="review-avatar" style="width:48px;height:48px;font-size:1rem">${getInitials(r.from)}</div>
                 <div>
-                  <div style="font-weight:600">${r.from}</div>
+                  <div style="font-weight:600">${escapeHtml(r.from)}</div>
                   <div style="font-size:0.8rem;color:#666">Wants to connect</div>
                 </div>
               </div>
@@ -1082,7 +1312,7 @@
               <div style="display:flex;align-items:center;gap:12px">
                 <div class="review-avatar" style="width:48px;height:48px;font-size:1rem">${getInitials(p.name)}</div>
                 <div>
-                  <div style="font-weight:600">${p.name}</div>
+                  <div style="font-weight:600">${escapeHtml(p.name)}</div>
                   ${p.mutual ? `<div style="font-size:0.8rem;color:#0a66c2">${p.mutual} mutual connection${p.mutual>1?'s':''}</div>` : ''}
                 </div>
               </div>
@@ -1106,20 +1336,20 @@
             <div class="network-card" style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
               <div style="display:flex;align-items:center;gap:12px">
                 <div class="review-avatar" style="width:48px;height:48px;font-size:1rem">${getInitials(u)}</div>
-                <div style="font-weight:600">${u}</div>
+                <div style="font-weight:600">${escapeHtml(u)}</div>
               </div>
               <button onclick="sendConnectionRequest('${(u||'').replace(/'/g,"\\'")}'); render()" style="padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Connect</button>
             </div>
           `).join('') : '<p style="color:#666;padding:16px;background:#f9f9f9;border-radius:8px">No one to add from reviews right now.</p>'}</div>
           <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Your connections (${conns.length})</h3>
-          <div>${conns.length ? conns.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,0.06)"><span>${c}</span><button onclick="removeConnection('${(c||'').replace(/'/g,"\\'")}'); render()" style="padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">Remove</button></div>`).join('') : '<p style="color:#666">No connections yet. Invite people above or connect from reviews.</p>'}</div>
+          <div>${conns.length ? conns.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,0.06)"><span>${escapeHtml(c)}</span><button onclick="removeConnection('${(c||'').replace(/'/g,"\\'")}'); render()" style="padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">Remove</button></div>`).join('') : '<p style="color:#666">No connections yet. Invite people above or connect from reviews.</p>'}</div>
         </div>`;
       } else if (state.panel === 'notifications') {
         const notifs = state.notifications.filter(n => !n.recipient || n.recipient === state.user?.displayName).slice().reverse();
         mainContent = `<div class="main">
           <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
           <h2 style="margin-bottom:16px">Notifications</h2>
-          ${notifs.length ? notifs.map(n=>`<div style="padding:12px;background:white;border-radius:8px;margin-bottom:8px;${n.read?'opacity:0.7':''}${n.type==='connection_request'?'cursor:pointer':''}" ${n.type==='connection_request'?'onclick="state.panel=\'network\'; render()"':''}>${n.text}${n.type==='connection_request'?' — Tap to view in Network':''}</div>`).join('') + `<button onclick="state.notifications.forEach(n=>{if(!n.recipient||n.recipient===state.user?.displayName)n.read=true}); saveToStorage(); render()" style="margin-top:12px;padding:8px 16px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer">Mark all read</button>` : '<p style="color:#666">No notifications yet.</p>'}
+          ${notifs.length ? notifs.map(n=>`<div style="padding:12px;background:white;border-radius:8px;margin-bottom:8px;${n.read?'opacity:0.7':''}${n.type==='connection_request'?'cursor:pointer':''}" ${n.type==='connection_request'?'onclick="state.panel=\'network\'; render()"':''}>${escapeHtml(n.text)}${n.type==='connection_request'?' — Tap to view in Network':''}</div>`).join('') + `<button onclick="state.notifications.forEach(n=>{if(!n.recipient||n.recipient===state.user?.displayName)n.read=true}); saveToStorage(); render()" style="margin-top:12px;padding:8px 16px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer">Mark all read</button>` : '<p style="color:#666">No notifications yet.</p>'}
         </div>`;
       } else if (state.panel === 'restaurant' && state.viewRestaurant) {
         const vr = state.viewRestaurant;
@@ -1129,7 +1359,7 @@
         mainContent = `<div class="main">
           <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; state.viewRestaurant=null; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
           <div style="padding:20px;background:white;border-radius:12px;margin-bottom:16px">
-            <h1 style="font-size:1.5rem;margin-bottom:8px">${vr.name}</h1>
+            <h1 style="font-size:1.5rem;margin-bottom:8px">${escapeHtml(vr.name)}</h1>
             <div style="display:flex;gap:16px;flex-wrap:wrap;color:#666;font-size:0.95rem">
               ${networkScore ? `<span style="font-weight:500;color:#333">Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</span>` : ''}
               ${cuisines.length ? `<span>${cuisines.join(', ')}</span>` : ''}
@@ -1171,11 +1401,11 @@
         mainContent = `
           <div class="main add-review-page">
             <div style="position:relative">
-              <input type="text" class="add-review-input" id="addReviewRestaurantInput" placeholder="${isEditing ? 'Change restaurant or address (search to update)' : 'Type restaurant name to search (min 3 chars)'}" 
+              <input type="text" class="add-review-input" id="addReviewRestaurantInput" placeholder="${isEditing ? 'Change restaurant or address (search to update)' : 'Type restaurant name (suggestions near you)'}" 
                 value="${(state.restaurantSearch||'').replace(/"/g,'&quot;')}" 
-                oninput="searchRestaurants(this.value)">
+                oninput="searchRestaurants(this.value)" onfocus="requestUserLocationIfNeeded()">
               <div id="addReviewSearchResults" class="search-results" style="display:${state.searchResults.length?'block':'none'}">${state.searchResults.map((p, i) => `
-                <div class="search-result-item" onclick="selectPlaceByIndex(${i})">${p.name}</div>
+                <div class="search-result-item" onclick="selectPlaceByIndex(${i})">${escapeHtml(p.name)}</div>
               `).join('')}</div>
             </div>
             <div class="add-review-rating">
@@ -1198,10 +1428,19 @@
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.95rem"><input type="checkbox" ${state.addWouldGoAgain?'checked':''} onchange="state.addWouldGoAgain=this.checked; render()"> 🔄 Would go again</label>
             </div>
             <div class="add-review-photos">
-              <label class="photo-upload-btn"><input type="file" accept="image/*" multiple onchange="handlePhotoUpload(this)" style="display:none">📷 Add photos</label>
-              ${(state.addPhotos||[]).map((p,i)=>`<span class="photo-preview"><img src="${p}" alt=""><button type="button" onclick="state.addPhotos.splice(${i},1); render()">×</button></span>`).join('')}
+              <div class="photo-add-sheet">
+                <button type="button" class="photo-upload-btn" onclick="togglePhotoAddSheet()">📷 Add photos</button>
+                <div class="photo-add-sheet-backdrop" id="photoAddBackdrop" onclick="closePhotoAddSheet()"></div>
+                <div class="photo-add-sheet-menu" id="photoAddMenu">
+                  <button type="button" class="photo-add-sheet-item" onclick="openCameraCapture(event)">📷 Take Photo</button>
+                  <button type="button" class="photo-add-sheet-item" onclick="document.getElementById('photoInputLibrary').click(); closePhotoAddSheet()">🖼️ Choose from Library</button>
+                </div>
+                <input type="file" id="photoInputCamera" accept="image/*" capture="user" onchange="handlePhotoUpload(this)" style="display:none">
+                <input type="file" id="photoInputLibrary" accept="image/*" multiple onchange="handlePhotoUpload(this)" style="display:none">
+              </div>
+              ${(state.addPhotos||[]).map((p,i)=>isSafePhotoUrl(p)?`<span class="photo-preview"><img src="${p}" alt=""><button type="button" onclick="state.addPhotos.splice(${i},1); render()">×</button></span>`:'').filter(Boolean).join('')}
             </div>
-            <textarea class="add-review-textarea" placeholder="Write your review..." oninput="state.reviewText=this.value">${(state.reviewText||'').replace(/</g,'&lt;')}</textarea>
+            <textarea class="add-review-textarea" placeholder="Write your review..." maxlength="${MAX_REVIEW_TEXT}" oninput="state.reviewText=this.value">${(state.reviewText||'').replace(/</g,'&lt;')}</textarea>
             <button class="add-review-submit" onclick="addReview()">${isEditing ? 'Update Review' : 'Post Review'}</button>
             ${isEditing ? `<button class="add-review-cancel" onclick="cancelEdit()">Cancel</button>` : ''}
           </div>
@@ -1255,8 +1494,8 @@
         <div class="menu-overlay" onclick="closeMenu()"></div>
         <div class="menu-sidebar">
           <div class="menu-sidebar-header">
-            <div class="menu-sidebar-avatar" style="${(state.profiles[state.user.displayName]?.avatar) ? 'background-image:url('+state.profiles[state.user.displayName].avatar+');background-size:cover;background-position:center' : ''}">${state.profiles[state.user.displayName]?.avatar ? '' : getInitials(state.user.displayName)}</div>
-            <div class="menu-sidebar-name">${state.user.displayName || 'User'}</div>
+            <div class="menu-sidebar-avatar" style="${getSafeAvatarUrl(state.profiles[state.user.displayName]) ? 'background-image:url('+getSafeAvatarUrl(state.profiles[state.user.displayName])+');background-size:cover;background-position:center' : ''}">${getSafeAvatarUrl(state.profiles[state.user.displayName]) ? '' : getInitials(state.user.displayName)}</div>
+            <div class="menu-sidebar-name">${escapeHtml(state.user.displayName || 'User')}</div>
           </div>
           <nav class="menu-sidebar-nav">
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='main'; state.tab='feed'; render()">Feed</button>
@@ -1321,7 +1560,7 @@
       Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
       render();
     }
-    function setTab(t) { state.tab = t; state.panel = t === 'network' ? 'network' : 'main'; if (t !== 'add') state.editingReview = null; render(); if (t === 'map') setTimeout(initMap, 50); }
+    function setTab(t) { state.tab = t; state.panel = t === 'network' ? 'network' : 'main'; if (t !== 'add') state.editingReview = null; render(); if (t === 'map') setTimeout(initMap, 50); if (t === 'add') { loadNsfwModel(); requestUserLocationIfNeeded(); } }
     function filterMap(f) { state.mapFilter = f; render(); setTimeout(function(){ if (state.tab === 'map') initMap(); }, 50); }
     function setRating(n) { state.rating = n; render(); }
 
@@ -1347,7 +1586,7 @@
         const dirUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + r.lat + ',' + r.lng;
         return '<div class="map-popup" style="min-width:180px;max-width:260px">' +
           (firstPhoto ? '<img src="' + firstPhoto + '" alt="" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:6px" onerror="this.style.display=\'none\'">' : '') +
-          '<strong>' + (r.name||'').replace(/</g,'&lt;') + '</strong><br>' +
+          '<strong>' + escapeHtml(r.name||'') + '</strong><br>' +
           '<span style="color:' + color + '">● ' + (r.level===1?'1st level':r.level===2?'2nd level':'Your review') + '</span><br>' +
           '<span style="font-size:0.85rem;color:#666">' + cuisineStr + ' · ' + priceStr + '</span><br>' +
           '<span style="font-size:0.85rem">' + (r.avgRating !== '-' ? r.avgRating + ' ★' : '-') + ' · ' + (r.reviews?.length||0) + ' review' + ((r.reviews?.length||0)===1?'':'s') + '</span><br>' +

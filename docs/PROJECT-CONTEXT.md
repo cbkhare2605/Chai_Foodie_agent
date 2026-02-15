@@ -60,6 +60,12 @@
 - **Where:** `foodie-website/foodie.html`.
 - **Decisions / notes:** getPeopleYouMightKnow() returns friends-of-friends sorted by mutual connections.
 
+### 2025-02-15 — Deployment next steps
+
+- **What:** Created `docs/DEPLOYMENT-NEXT-STEPS.md` with concrete checklist: sync PWA, commit/push, Vercel setup, ongoing workflow.
+- **Where:** `docs/DEPLOYMENT-NEXT-STEPS.md`.
+- **Decisions / notes:** Repo root `vercel.json` serves from `foodie-website/pwa/public`. Run `cp foodie-website/foodie.html foodie-website/pwa/public/index.html` before deploy to sync latest changes.
+
 ---
 
 ## Active areas and owners
