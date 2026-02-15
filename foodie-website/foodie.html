@@ -433,8 +433,25 @@
     async function nominatimSearch(query, viewbox) {
       let url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=10';
       if (viewbox) url += '&viewbox=' + viewbox + '&bounded=0';
-      const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'FoodieApp/1.0' } });
+      const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'FoodieApp/1.0 (https://github.com/foodie-app; contact@foodie.app)' } });
       return res.json();
+    }
+    async function photonSearch(query, lat, lon) {
+      let url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(query) + '&limit=10';
+      if (lat != null && lon != null) url += '&lat=' + lat + '&lon=' + lon;
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const data = await res.json();
+      if (!data?.features?.length) return [];
+      return data.features.map(f => {
+        const p = f.properties || {};
+        const coords = f.geometry?.coordinates || [];
+        const lng = coords[0], lat = coords[1];
+        const primary = p.name || p.street || p.locality || p.city || 'Place';
+        const parts = [p.street, p.city, p.state].filter(Boolean);
+        const extra = parts.filter(x => x !== primary).slice(0, 2).join(', ');
+        const name = extra ? primary + ', ' + extra : primary;
+        return { name, lat: parseFloat(lat), lng: parseFloat(lng) };
+      });
     }
 
     function requestUserLocationIfNeeded() {
@@ -456,38 +473,32 @@
 
     function searchRestaurants(q) {
       state.restaurantSearch = q;
-      if (q.length < 3) { state.searchResults = []; updateAddReviewSearchResults(); return; }
+      if (q.length < 2) { state.searchResults = []; updateAddReviewSearchResults(); return; }
       clearTimeout(searchTimer);
       searchTimer = setTimeout(async () => {
+        const loc = state.userLocation || { lat: 37.37, lng: -122.03 };
         try {
-          var viewbox = null;
-          if (state.userLocation && !queryLooksLikeDifferentLocation(q)) {
-            var r = 0.15;
-            var left = state.userLocation.lng - r;
-            var top = state.userLocation.lat + r;
-            var right = state.userLocation.lng + r;
-            var bottom = state.userLocation.lat - r;
-            viewbox = left + ',' + top + ',' + right + ',' + bottom;
+          let results = await photonSearch(q, loc.lat, loc.lng);
+          if (!results.length) results = await photonSearch(q + ' restaurant', loc.lat, loc.lng);
+          if (!results.length) {
+            const data = await nominatimSearch(q);
+            if (data?.length) results = data.map(p => ({ name: p.display_name, lat: parseFloat(p.lat), lng: parseFloat(p.lon) }));
           }
-          let data = await nominatimSearch(q, viewbox);
-          if (!data || data.length === 0) data = await nominatimSearch(q + ' restaurant', viewbox);
-          if (!data || data.length === 0 && !viewbox) data = await nominatimSearch(q + ', USA');
-          if (!data || data.length === 0 && !viewbox) data = await nominatimSearch(q + ', California');
-          state.searchResults = (data && data.length) ? data.map(p => ({ name: p.display_name, lat: parseFloat(p.lat), lng: parseFloat(p.lon) })).slice(0, 8) : [{ name: q, lat: state.userLocation ? state.userLocation.lat : 37.37, lng: state.userLocation ? state.userLocation.lng : -122.03 }];
+          if (!results.length) results = [{ name: q, lat: loc.lat, lng: loc.lng }];
+          state.searchResults = results.slice(0, 8);
         } catch (e) {
-          state.searchResults = [{ name: q, lat: state.userLocation ? state.userLocation.lat : 37.37, lng: state.userLocation ? state.userLocation.lng : -122.03 }];
+          state.searchResults = [{ name: q, lat: loc.lat, lng: loc.lng }];
         }
         updateAddReviewSearchResults();
-      }, 300);
+      }, 400);
     }
 
     async function geocodePlace(query) {
       try {
+        const results = await photonSearch(query, null, null);
+        if (results.length > 0) return { lat: results[0].lat, lng: results[0].lng };
         const data = await nominatimSearch(query);
-        if (data && data.length > 0) {
-          const p = data[0];
-          return { lat: parseFloat(p.lat), lng: parseFloat(p.lon) };
-        }
+        if (data?.length) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
       } catch (e) {}
       return null;
     }
