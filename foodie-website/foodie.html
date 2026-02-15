@@ -578,18 +578,36 @@
       const k = getSavedKey(r);
       if (!state.groupLists[listName]) state.groupLists[listName] = [];
       if (!state.groupLists[listName].includes(k)) state.groupLists[listName].push(k);
-      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.toggleList(listName, k, true); } catch (e) { console.warn(e); } } else saveToStorage();
-      showListToast('Added to ' + listName);
+      try {
+        if (window.FOODIE_API?.enabled) await window.FOODIE_API.toggleList(listName, k, true);
+        else saveToStorage();
+        showListToast('Added to ' + listName);
+      } catch (e) {
+        console.warn(e);
+        const idx = (state.groupLists[listName] || []).indexOf(k);
+        if (idx >= 0) state.groupLists[listName].splice(idx, 1);
+        showListToast('Could not save. Try again.');
+      }
       render();
     }
     async function removeFromList(reviewId, listName) {
       const r = state.reviews.find(x => x.id === reviewId);
       if (!r) return;
       const k = getSavedKey(r);
+      const hadInSaved = state.saved.includes(k);
+      const hadInList = (state.groupLists[listName] || []).includes(k);
       if (listName === 'Saved') { const i = state.saved.indexOf(k); if (i >= 0) state.saved.splice(i, 1); }
       else if (state.groupLists[listName]) { const arr = state.groupLists[listName]; const i = arr.indexOf(k); if (i >= 0) arr.splice(i, 1); }
-      if (window.FOODIE_API?.enabled) { try { if (listName === 'Saved') await window.FOODIE_API.toggleSave(k, false); else await window.FOODIE_API.toggleList(listName, k, false); } catch (e) { console.warn(e); } } else saveToStorage();
-      showListToast('Removed from ' + listName);
+      try {
+        if (window.FOODIE_API?.enabled) { if (listName === 'Saved') await window.FOODIE_API.toggleSave(k, false); else await window.FOODIE_API.toggleList(listName, k, false); }
+        else saveToStorage();
+        showListToast('Removed from ' + listName);
+      } catch (e) {
+        console.warn(e);
+        if (listName === 'Saved' && hadInSaved) state.saved.push(k);
+        else if (hadInList && state.groupLists[listName]) state.groupLists[listName].push(k);
+        showListToast('Could not remove. Try again.');
+      }
       render();
     }
     async function toggleList(reviewId, listName) {
@@ -1223,8 +1241,8 @@
           <div class="review-actions-secondary">
             <div class="review-list-dropdown">
               <button type="button" class="review-action-btn list-trigger-btn" onclick="toggleListDropdown(event, this)" aria-label="Add to list">📋 Add to list</button>
-              <div class="list-dropdown-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:199" onclick="var w=this.closest('.review-list-dropdown'); w.querySelector('.list-dropdown-menu').style.display='none'; w.querySelector('.list-dropdown-menu').classList.remove('show-mobile'); this.style.display='none'"></div>
-              <div class="list-dropdown-menu" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;background:white;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:8px;min-width:160px;z-index:50;max-height:50vh;overflow-y:auto">
+              <div class="list-dropdown-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:199" onclick="var w=this.closest('.review-list-dropdown'); if(w){var m=w.querySelector('.list-dropdown-menu'); var b=w.querySelector('.list-dropdown-backdrop'); if(m){m.style.display='none';m.classList.remove('show-mobile');} if(b)b.style.display='none'}"></div>
+              <div class="list-dropdown-menu" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;background:white;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);padding:8px;min-width:160px;z-index:200;max-height:50vh;overflow-y:auto">
                 ${GROUP_LIST_NAMES.filter(n=>n!=='Saved').map(listName=>{
                   const inList = (state.groupLists[listName]||[]).includes(getSavedKey(r));
                   return `<button onclick="toggleList('${r.id}','${listName}'); var w=this.closest('.review-list-dropdown'); if(w){var m=w.querySelector('.list-dropdown-menu'); var b=w.querySelector('.list-dropdown-backdrop'); if(m){m.style.display='none';m.classList.remove('show-mobile');} if(b)b.style.display='none'}" style="display:block;width:100%;padding:12px 16px;text-align:left;border:none;background:none;cursor:pointer;font-size:1rem">${inList?'✓ ':''}${listName}</button>`;

@@ -290,11 +290,13 @@
 
   async function toggleList(listName, savedKey, add) {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) throw new Error('Not signed in');
     if (add) {
-      await supabase.from('group_list_items').upsert({ user_id: user.id, list_name: listName, saved_key: savedKey }, { onConflict: 'user_id,list_name,saved_key' });
+      const { error } = await supabase.from('group_list_items').upsert({ user_id: user.id, list_name: listName, saved_key: savedKey }, { onConflict: 'user_id,list_name,saved_key' });
+      if (error) throw error;
     } else {
-      await supabase.from('group_list_items').delete().eq('user_id', user.id).eq('list_name', listName).eq('saved_key', savedKey);
+      const { error } = await supabase.from('group_list_items').delete().eq('user_id', user.id).eq('list_name', listName).eq('saved_key', savedKey);
+      if (error) throw error;
     }
   }
 
