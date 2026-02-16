@@ -922,9 +922,15 @@
         render();
       }
     }
+    function normalizeGroupName(s) {
+      return (s || '').trim().replace(/\s+/g, ' ');
+    }
     async function createGroup() {
-      const name = (document.getElementById('createGroupNameInput')?.value || state.createGroupName || '').trim();
+      const raw = (document.getElementById('createGroupNameInput')?.value || state.createGroupName || '').trim();
+      const name = normalizeGroupName(raw);
       if (!name) { alert('Enter a group name'); return; }
+      const existing = (state.groups || []).concat(state.pendingGroups || []).find(g => normalizeGroupName(g.name).toLowerCase() === name.toLowerCase());
+      if (existing) { alert('You already have a group named "' + existing.name + '". Use a different name.'); return; }
       const api = window.FOODIE_API;
       if (!api?.enabled) return;
       try {

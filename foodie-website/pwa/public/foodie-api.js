@@ -187,6 +187,10 @@
   async function createGroup(name) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not logged in');
+    const norm = (n) => (n || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const { data: existing } = await supabase.from('groups').select('id, name');
+    const match = (existing || []).find(g => norm(g.name) === norm(name));
+    if (match) throw new Error('You already have a group named "' + match.name + '". Use a different name.');
     const id = 'g_' + crypto.randomUUID().replace(/-/g, '');
     const { error: groupErr } = await supabase.from('groups').insert({ id, name, created_by: user.id });
     if (groupErr) throw groupErr;
