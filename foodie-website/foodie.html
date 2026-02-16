@@ -368,6 +368,7 @@
       mapFocusRestaurant: null,
       pendingConnect: null,
       groups: [],
+      pendingGroups: [],
       selectedGroupId: null,
       groupsPanel: 'list',
       createGroupName: '',
@@ -428,6 +429,12 @@
         state.groupLists = stored.groupLists || {};
         state.trustScores = stored.trustScores || {};
         state.groups = stored.groups || [];
+        const serverIds = new Set((stored.groups || []).map(g => g.id));
+        state.pendingGroups = (state.pendingGroups || []).filter(pg => {
+          if (serverIds.has(pg.id)) return false;
+          state.groups.push(pg);
+          return true;
+        });
         render();
       } catch (e) { console.warn('Refresh failed', e); }
     }
@@ -903,14 +910,13 @@
         }
         const memberNames = [state.user.displayName, ...(state.createGroupMembers || [])];
         const newGroup = { id, name, createdBy: state.user.displayName, memberNames };
+        state.pendingGroups = state.pendingGroups || [];
+        state.pendingGroups.push(newGroup);
         state.groups = state.groups || [];
         state.groups.push(newGroup);
         state.groupsPanel = 'detail'; state.selectedGroupId = id; state.createGroupName = ''; state.createGroupMembers = [];
         render();
-        refreshFeed().then(() => {
-          if (!(state.groups || []).some(g => g.id === id)) state.groups.push(newGroup);
-          render();
-        });
+        refreshFeed().then(() => render());
       } catch (e) { alert(e.message || 'Could not create group'); }
     }
     async function addMemberToGroup(groupId, displayName) {
