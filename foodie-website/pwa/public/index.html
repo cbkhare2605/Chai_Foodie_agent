@@ -2247,6 +2247,7 @@
           </div>
         </div>`;
       })() : '';
+      const savedNetworkSearch = (state.panel === 'network') ? (document.getElementById('networkSearchInput')?.value ?? '') : null;
       app.innerHTML = `
         <div class="top-bar">
           <div class="header">
@@ -2282,6 +2283,10 @@
           </aside>
         </main>
       `;
+      if (savedNetworkSearch !== null) {
+        const el = document.getElementById('networkSearchInput');
+        if (el) { el.value = savedNetworkSearch; state.networkSearch = savedNetworkSearch; }
+      }
     }
 
     let map = null;
