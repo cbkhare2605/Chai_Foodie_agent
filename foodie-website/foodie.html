@@ -53,6 +53,13 @@
     .ad-slot-label { font-size: 0.7rem; color: #999; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
     .ad-slot-placeholder { color: #bbb; font-size: 0.9rem; }
     @media (max-width: 900px) { .ad-strip { display: none; } }
+
+    .ptr-indicator { position: fixed; top: 120px; left: 0; right: 0; height: 56px; display: flex; align-items: center; justify-content: center; gap: 8px; background: #f5f5f5; color: #666; font-size: 0.9rem; z-index: 50; transform: translateY(-100%); transition: transform 0.2s ease, opacity 0.2s ease; opacity: 0; pointer-events: none; }
+    .ptr-indicator.visible { opacity: 1; }
+    .ptr-indicator .ptr-spinner { width: 24px; height: 24px; border: 2px solid #e31919; border-top-color: transparent; border-radius: 50%; animation: ptr-spin 0.8s linear infinite; }
+    .ptr-indicator:not(.refreshing) .ptr-spinner { display: none; }
+    .ptr-indicator.refreshing .ptr-spinner { display: block; }
+    @keyframes ptr-spin { to { transform: rotate(360deg); } }
     
     .feed-compose { background: white; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 12px; cursor: pointer; }
     .feed-compose:hover { background: #f8f8f8; }
@@ -386,6 +393,16 @@
         render();
         return;
       }
+      if (window.FOODIE_API?.enabled && window.FOODIE_API.supabase) {
+        await new Promise(function(resolve) {
+          var done = false;
+          function finish() { if (!done) { done = true; resolve(); } }
+          var t = setTimeout(finish, 4000);
+          var sub = window.FOODIE_API.supabase.auth.onAuthStateChange(function(ev, s) {
+            if (ev === 'INITIAL_SESSION') { clearTimeout(t); if (sub?.unsubscribe) sub.unsubscribe(); finish(); }
+          });
+        });
+      }
       var stored;
       if (window.FOODIE_API && window.FOODIE_API.enabled && window.FOODIE_API.loadData) {
         try {
@@ -413,15 +430,18 @@
       handleDeepLink();
       setupAutoRefresh();
       if (state.user && window.FOODIE_API?.enabled && (stored.groups || []).length === 0) {
-        setTimeout(async () => {
-          try {
-            const retry = await window.FOODIE_API.loadData();
-            if ((retry.groups || []).length > 0) {
-              state.groups = retry.groups || [];
-              render();
-            }
-          } catch (e) {}
-        }, 2500);
+        [1000, 2000, 4000].forEach(function(delay) {
+          setTimeout(async function() {
+            if ((state.groups || []).length > 0) return;
+            try {
+              const retry = await window.FOODIE_API.loadData();
+              if ((retry.groups || []).length > 0) {
+                state.groups = retry.groups || [];
+                render();
+              }
+            } catch (e) {}
+          }, delay);
+        });
       }
     }
 
@@ -449,16 +469,19 @@
         render();
         if ((stored.groups || []).length === 0 && !state._groupsRetryScheduled) {
           state._groupsRetryScheduled = true;
-          setTimeout(async () => {
-            try {
-              const retry = await window.FOODIE_API.loadData();
-              if ((retry.groups || []).length > 0) {
-                state.groups = retry.groups || [];
-                state._groupsRetryScheduled = false;
-                render();
-              } else state._groupsRetryScheduled = false;
-            } catch (e) { state._groupsRetryScheduled = false; }
-          }, 2500);
+          [1500, 3000].forEach(function(delay) {
+            setTimeout(async function() {
+              if ((state.groups || []).length > 0) return;
+              try {
+                const retry = await window.FOODIE_API.loadData();
+                if ((retry.groups || []).length > 0) {
+                  state.groups = retry.groups || [];
+                  render();
+                }
+              } catch (e) {}
+              if (delay === 3000) state._groupsRetryScheduled = false;
+            }, delay);
+          });
         }
       } catch (e) { console.warn('Refresh failed', e); }
     }
@@ -469,6 +492,51 @@
       setInterval(() => {
         if (document.visibilityState === 'visible' && state.user && window.FOODIE_API?.enabled) refreshFeed();
       }, 60000);
+      setupPullToRefresh();
+    }
+    let ptrStartY = 0, ptrPullAmount = 0, ptrActive = false;
+    function setupPullToRefresh() {
+      document.addEventListener('touchstart', function ptrTouchStart(e) {
+        if (!state.user || !window.FOODIE_API?.enabled || document.getElementById('ptr-indicator') == null) return;
+        if ((window.scrollY || document.documentElement.scrollTop) > 15) return;
+        ptrStartY = e.touches[0].clientY;
+        ptrPullAmount = 0;
+        ptrActive = true;
+      }, { passive: true });
+      document.addEventListener('touchmove', function ptrTouchMove(e) {
+        if (!ptrActive || !state.user || !window.FOODIE_API?.enabled) return;
+        if ((window.scrollY || document.documentElement.scrollTop) > 15) { ptrActive = false; return; }
+        const y = e.touches[0].clientY;
+        const delta = y - ptrStartY;
+        if (delta > 0) {
+          ptrPullAmount = Math.min(delta * 0.6, 100);
+          const ind = document.getElementById('ptr-indicator');
+          const txt = ind?.querySelector('.ptr-text');
+          if (ind) {
+            ind.classList.add('visible');
+            ind.style.transform = 'translateY(' + (ptrPullAmount - 56) + 'px)';
+            if (txt) txt.textContent = ptrPullAmount >= 60 ? 'Release to refresh' : 'Pull to refresh';
+          }
+          if (ptrPullAmount > 70) e.preventDefault();
+        }
+      }, { passive: false });
+      document.addEventListener('touchend', function ptrTouchEnd() {
+        if (!ptrActive) return;
+        const ind = document.getElementById('ptr-indicator');
+        const txt = ind?.querySelector('.ptr-text');
+        if (ptrPullAmount >= 60 && state.user && window.FOODIE_API?.enabled) {
+          if (ind) { ind.classList.add('refreshing'); ind.style.transform = 'translateY(0)'; if (txt) txt.textContent = 'Refreshing...'; }
+          refreshFeed().then(function() {}).finally(function() {
+            ptrPullAmount = 0; ptrActive = false;
+            const el = document.getElementById('ptr-indicator');
+            if (el) { el.classList.remove('visible', 'refreshing'); el.style.transform = 'translateY(-100%)'; const t = el.querySelector('.ptr-text'); if (t) t.textContent = 'Pull to refresh'; }
+          });
+        } else {
+          ptrPullAmount = 0; ptrActive = false;
+          const el = document.getElementById('ptr-indicator');
+          if (el) { el.classList.remove('visible', 'refreshing'); el.style.transform = 'translateY(-100%)'; const t = el.querySelector('.ptr-text'); if (t) t.textContent = 'Pull to refresh'; }
+        }
+      }, { passive: true });
     }
 
     let searchTimer = null;
@@ -2072,7 +2140,7 @@
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='myreviews'; render()">My Reviews</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='saved'; render()">Saved (${state.saved.length})</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='network'; render()">Network ${getPendingRequestsForMe().length ? `(${getPendingRequestsForMe().length})` : ''}</button>
-            ${window.FOODIE_API?.enabled ? `<button class="menu-sidebar-item" onclick="closeMenu(); state.panel='groups'; state.groupsPanel='list'; state.selectedGroupId=null; render()">Groups (${(state.groups||[]).length})</button>` : ''}
+            ${window.FOODIE_API?.enabled ? `<button class="menu-sidebar-item" onclick="closeMenu(); state.panel='groups'; state.groupsPanel='list'; state.selectedGroupId=null; if(state.user)refreshFeed(); render()">Groups (${(state.groups||[]).length})</button>` : ''}
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='notifications'; render()">Notifications ${state.notifications.filter(n=>(!n.recipient||n.recipient===state.user?.displayName)&&!n.read).length ? `(${state.notifications.filter(n=>(!n.recipient||n.recipient===state.user?.displayName)&&!n.read).length})` : ''}</button>
             <button class="menu-sidebar-item" onclick="shareApp()">📤 Share app</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='feedback'; render()">Feedback</button>
@@ -2143,6 +2211,7 @@
         ${reviewersModalHtml}
         ${fixLocationModalHtml}
         <main id="main" class="app-content" role="main">
+          <div id="ptr-indicator" class="ptr-indicator" aria-live="polite"><span class="ptr-spinner"></span><span class="ptr-text">Pull to refresh</span></div>
           <div class="app-content-inner">${mainContent}</div>
           <aside class="ad-strip" aria-label="Advertisement">
             <div class="ad-slot">
@@ -2268,7 +2337,7 @@
       Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
       render();
     }
-    function setTab(t) { state.tab = t; state.panel = t === 'network' ? 'network' : (t === 'groups' ? 'groups' : 'main'); if (t !== 'add') state.editingReview = null; render(); if (t === 'map') setTimeout(initMap, 200); if (t === 'add') { loadNsfwModel(); requestUserLocationIfNeeded(); } }
+    function setTab(t) { state.tab = t; state.panel = t === 'network' ? 'network' : (t === 'groups' ? 'groups' : 'main'); if (t !== 'add') state.editingReview = null; render(); if (t === 'map') setTimeout(initMap, 200); if (t === 'add') { loadNsfwModel(); requestUserLocationIfNeeded(); } if (t === 'groups' && state.user && window.FOODIE_API?.enabled) refreshFeed(); }
     function filterMap(f) { state.mapFilter = f; render(); setTimeout(function(){ if (state.tab === 'map') initMap(); }, 150); }
     function setRating(n) { state.rating = n; render(); }
 
