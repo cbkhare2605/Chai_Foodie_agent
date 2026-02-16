@@ -39,3 +39,15 @@ cd "/Users/chaitanyakhare/Cursor projects/Chai_Foodie_agent/foodie-website" && .
 | `foodie-website/foodie-api.js` | Yes |
 | `foodie-website/config.js` | Yes |
 | `foodie-website/pwa/public/` | Yes (deploy output) |
+
+---
+
+## Cache invalidation (force users to get latest)
+
+When you fix bugs (e.g. search input) and need all users to load the new code:
+
+1. **Bump version** in `foodie.html`: change `?v=4` to `?v=5` on `config.js`, `foodie-api.js`, and `sw.js`.
+2. **Bump cache** in `pwa/public/sw.js`: change `CACHE = 'foodie-v4'` to `CACHE = 'foodie-v5'`.
+3. Run sync + push as above.
+
+The new SW will activate, clear old caches, and users will get fresh assets on next load or when they revisit.
