@@ -104,7 +104,7 @@
     if (reviews.length < 15 && window.FOODIE_SEED_REVIEWS?.length) {
       const seed = window.FOODIE_SEED_REVIEWS
         .map(r => ({ ...r, date: r.date || Date.now() - 86400000, likedBy: r.likedBy || [] }))
-        .filter(s => !reviews.some(db => Math.abs(db.lat - s.lat) < 0.01 && Math.abs(db.lng - s.lng) < 0.01));
+        .filter(s => !reviews.some(db => Math.abs(db.lat - s.lat) < 0.02 && Math.abs(db.lng - s.lng) < 0.02));
       reviews = [...reviews, ...seed].sort((a, b) => (b.date || 0) - (a.date || 0));
     }
 
