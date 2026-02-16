@@ -47,6 +47,8 @@
     
     .app-content { padding-top: 120px; min-height: 100vh; display: flex; justify-content: center; }
     .app-content-inner { flex: 1; min-width: 0; max-width: 720px; width: 100%; }
+    .app-content-inner.map-view { max-width: 960px; }
+    .app-content-inner.add-view { max-width: 880px; }
     .main { padding: 16px; width: 100%; }
 
     .ptr-indicator { position: fixed; top: 120px; left: 0; right: 0; height: 56px; display: flex; align-items: center; justify-content: center; gap: 8px; background: #f5f5f5; color: #666; font-size: 0.9rem; z-index: 50; transform: translateY(-100%); transition: transform 0.2s ease, opacity 0.2s ease; opacity: 0; pointer-events: none; }
@@ -92,8 +94,9 @@
     .review-action-btn:hover { background: #f3f2ef; color: #0a66c2; }
     .review-action-btn.liked { color: #e31919; }
     
-    .add-review-page { display: flex; flex-direction: column; gap: 16px; }
-    .add-review-page { position: relative; }
+    .add-review-page { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 24px; position: relative; }
+    .add-review-page .add-review-full { grid-column: 1 / -1; }
+    @media (max-width: 640px) { .add-review-page { grid-template-columns: 1fr; } }
     .add-review-input { width: 100%; padding: 14px; font-size: 1rem; border: none; border-radius: 8px; }
     .search-results { position: absolute; top: 100%; left: 0; right: 0; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 200px; overflow-y: auto; z-index: 20; margin-top: 4px; }
     .search-result-item { padding: 12px 14px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 0.95rem; }
@@ -147,7 +150,7 @@
     .filter-btn:nth-child(3) { background: #006CE0; }
     .filter-btn:nth-child(4) { background: #ff8d00; }
     .filter-active { box-shadow: inset 0 0 0 3px white; }
-    #map-container { height: 560px; min-height: 560px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; }
+    #map-container { height: 400px; min-height: 400px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; }
     #fix-location-map { height: 300px; min-height: 300px; width: 100%; border-radius: 12px; overflow: hidden; }
     .map-marker.leaflet-marker-icon { background: none !important; border: none !important; }
     .map-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem; color: #666; flex-wrap: wrap; }
@@ -382,14 +385,15 @@
       authMode: 'signup',
       viewLikersReviewId: null,
       viewReviewersReviewId: null,
-      fixLocationModal: null
+      fixLocationModal: null,
+      _bootstrapComplete: false
     };
     async function bootstrapApp() {
-      render();
       const hashParams = new URLSearchParams((location.hash || '').replace(/^#/, ''));
       if (hashParams.get('type') === 'recovery') {
         state.authMode = 'reset';
         state.user = null;
+        state._bootstrapComplete = true;
         render();
         return;
       }
@@ -430,6 +434,7 @@
       state.groupLists = stored.groupLists || {};
       state.trustScores = stored.trustScores || {};
       state.groups = stored.groups || [];
+      state._bootstrapComplete = true;
       render();
       handleDeepLink();
       setupAutoRefresh();
@@ -1784,6 +1789,10 @@
 
     function render() {
       const app = document.getElementById('app');
+      if (!state._bootstrapComplete) {
+        app.innerHTML = '<div style="min-height:200px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;color:#666">Loading Foodie…</div>';
+        return;
+      }
       if (!state.user) {
         const useSupabase = window.FOODIE_API && window.FOODIE_API.enabled;
         if (useSupabase) {
@@ -2120,7 +2129,7 @@
         const isEditing = !!state.editingReview;
         mainContent = `
           <div class="main add-review-page">
-            <div style="position:relative">
+            <div class="add-review-full" style="position:relative">
               <input type="text" class="add-review-input" id="addReviewRestaurantInput" placeholder="${isEditing ? 'Change restaurant or address' : 'Restaurant name or address (optional: pick from suggestions)'}" 
                 value="${(state.restaurantSearch||'').replace(/"/g,'&quot;')}" 
                 oninput="state.restaurantSearch=this.value; searchRestaurants(this.value)" onfocus="requestUserLocationIfNeeded()" onblur="setTimeout(function(){state.searchResults=[];updateAddReviewSearchResults();},150)">
@@ -2130,7 +2139,7 @@
                 <div class="search-result-item" onclick="selectPlaceByIndex(${i})">${escapeHtml(p.name)}</div>
               `).join('')}</div>
             </div>
-            <p style="font-size:0.85rem;color:#666;margin:-8px 0 0 0">Type a name or pick from suggestions. Either works.</p>
+            <p class="add-review-full" style="font-size:0.85rem;color:#666;margin:-8px 0 0 0">Type a name or pick from suggestions. Either works.</p>
             <div class="add-review-rating">
               <span>Rating</span>
               <div class="rating-hearts">
@@ -2146,11 +2155,11 @@
                 ${[1,2,3,4].map(p => `<option value="${p}" ${state.addPrice===p?'selected':''}>${PRICE_LABELS[p-1]} Price</option>`).join('')}
               </select>
             </div>
-            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+            <div class="add-review-full" style="display:flex;gap:16px;flex-wrap:wrap">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.95rem"><input type="checkbox" ${state.addVerifiedVisit?'checked':''} onchange="state.addVerifiedVisit=this.checked; render()"> ✓ Verified visit</label>
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.95rem"><input type="checkbox" ${state.addWouldGoAgain?'checked':''} onchange="state.addWouldGoAgain=this.checked; render()"> 🔄 Would go again</label>
             </div>
-            <div class="add-review-photos">
+            <div class="add-review-full add-review-photos">
               <div class="photo-add-sheet">
                 <button type="button" class="photo-upload-btn" onclick="togglePhotoAddSheet()">📷 Add photos</button>
                 <div class="photo-add-sheet-backdrop" id="photoAddBackdrop" onclick="closePhotoAddSheet()"></div>
@@ -2163,9 +2172,11 @@
               </div>
               ${(state.addPhotos||[]).map((p,i)=>isSafePhotoUrl(p)?`<span class="photo-preview"><img src="${p}" alt=""><button type="button" onclick="state.addPhotos.splice(${i},1); render()">×</button></span>`:'').filter(Boolean).join('')}
             </div>
-            <textarea class="add-review-textarea" placeholder="Write your review..." maxlength="${MAX_REVIEW_TEXT}" oninput="state.reviewText=this.value">${(state.reviewText||'').replace(/</g,'&lt;')}</textarea>
-            <button class="add-review-submit" onclick="addReview()">${isEditing ? 'Update Review' : 'Post Review'}</button>
-            <button class="add-review-cancel" onclick="discardReview()">${isEditing ? 'Cancel' : 'Discard'}</button>
+            <textarea class="add-review-full add-review-textarea" placeholder="Write your review..." maxlength="${MAX_REVIEW_TEXT}" oninput="state.reviewText=this.value">${(state.reviewText||'').replace(/</g,'&lt;')}</textarea>
+            <div class="add-review-full" style="display:flex;gap:12px;flex-wrap:wrap">
+              <button class="add-review-submit" onclick="addReview()">${isEditing ? 'Update Review' : 'Post Review'}</button>
+              <button class="add-review-cancel" onclick="discardReview()">${isEditing ? 'Cancel' : 'Discard'}</button>
+            </div>
           </div>
         `;
       } else if (state.tab === 'map' && state.panel === 'main') {
@@ -2299,7 +2310,7 @@
         ${fixLocationModalHtml}
         <main id="main" class="app-content" role="main">
           <div id="ptr-indicator" class="ptr-indicator" aria-live="polite"><span class="ptr-spinner"></span><span class="ptr-text">Pull to refresh</span></div>
-          <div class="app-content-inner">${mainContent}</div>
+          <div class="app-content-inner ${state.tab==='map'?'map-view':''} ${state.tab==='add'?'add-view':''}">${mainContent}</div>
         </main>
       `;
       if (savedNetworkSearch !== null && savedNetworkSearch !== undefined) {
