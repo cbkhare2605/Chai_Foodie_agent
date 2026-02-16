@@ -884,6 +884,7 @@
       state.restaurantSearch = '';
       state.selectedPlace = null;
       state.searchResults = [];
+      updateAddReviewSearchResults();
       state.addCuisine = ''; state.addPrice = 2; state.addPhotos = []; state.addVerifiedVisit = false; state.addWouldGoAgain = true;
       setTab('feed');
     }
@@ -1178,6 +1179,7 @@
       state.reviewText = '';
       state.restaurantSearch = '';
       state.selectedPlace = null;
+      state.searchResults = [];
       state.editingReview = null;
       state.addCuisine = ''; state.addPrice = 2; state.addPhotos = []; state.addVerifiedVisit = false; state.addWouldGoAgain = true;
       const newReview = state.reviews[0];
