@@ -412,6 +412,17 @@
       render();
       handleDeepLink();
       setupAutoRefresh();
+      if (state.user && window.FOODIE_API?.enabled && (stored.groups || []).length === 0) {
+        setTimeout(async () => {
+          try {
+            const retry = await window.FOODIE_API.loadData();
+            if ((retry.groups || []).length > 0) {
+              state.groups = retry.groups || [];
+              render();
+            }
+          } catch (e) {}
+        }, 2500);
+      }
     }
 
     async function refreshFeed() {
@@ -436,6 +447,19 @@
           return true;
         });
         render();
+        if ((stored.groups || []).length === 0 && !state._groupsRetryScheduled) {
+          state._groupsRetryScheduled = true;
+          setTimeout(async () => {
+            try {
+              const retry = await window.FOODIE_API.loadData();
+              if ((retry.groups || []).length > 0) {
+                state.groups = retry.groups || [];
+                state._groupsRetryScheduled = false;
+                render();
+              } else state._groupsRetryScheduled = false;
+            } catch (e) { state._groupsRetryScheduled = false; }
+          }, 2500);
+        }
       } catch (e) { console.warn('Refresh failed', e); }
     }
     function setupAutoRefresh() {
@@ -1897,7 +1921,7 @@
         } else {
           mainContent = `<div class="main">
           <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
-          <h2 style="margin-bottom:20px">Groups</h2>
+          <h2 style="margin-bottom:20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">Groups <button onclick="state._groupsRetryScheduled=false; refreshFeed()" title="Refresh groups" style="padding:8px 12px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem">↻ Refresh</button></h2>
           <p style="font-size:0.9rem;color:#666;margin-bottom:16px">Private, invite-only groups. Create a group and add connections to share a smaller feed and map.</p>
           <button onclick="state.groupsPanel='create'; state.createGroupName=''; state.createGroupMembers=[]; render()" style="width:100%;padding:14px 20px;margin-bottom:24px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:500">+ Create group</button>
           ${groups.length ? groups.map(g=>`<div onclick="state.selectedGroupId='${g.id}'; state.groupsPanel='detail'; render()" style="padding:16px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);cursor:pointer"><div style="font-weight:600">${escapeHtml(g.name)}</div><div style="font-size:0.85rem;color:#666;margin-top:4px">${g.memberNames.length} member${g.memberNames.length!==1?'s':''} · by ${escapeHtml(g.createdBy)}</div></div>`).join('') : '<p style="color:#666">No groups yet. Create one to get started.</p>'}
