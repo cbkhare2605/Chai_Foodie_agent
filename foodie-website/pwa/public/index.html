@@ -47,6 +47,7 @@
     
     .app-content { padding-top: 120px; min-height: 100vh; display: flex; justify-content: center; }
     .app-content-inner { flex: 1; min-width: 0; max-width: 720px; width: 100%; }
+    .app-content-inner.map-view { max-width: min(960px, 100%); width: 100%; }
     .main { padding: 16px; width: 100%; }
 
     .ptr-indicator { position: fixed; top: 120px; left: 0; right: 0; height: 56px; display: flex; align-items: center; justify-content: center; gap: 8px; background: #f5f5f5; color: #666; font-size: 0.9rem; z-index: 50; transform: translateY(-100%); transition: transform 0.2s ease, opacity 0.2s ease; opacity: 0; pointer-events: none; }
@@ -146,7 +147,7 @@
     .filter-btn:nth-child(3) { background: #006CE0; }
     .filter-btn:nth-child(4) { background: #ff8d00; }
     .filter-active { box-shadow: inset 0 0 0 3px white; }
-    #map-container { height: 520px; min-height: 520px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; }
+    #map-container { height: 420px; min-height: 420px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; }
     #fix-location-map { height: 300px; min-height: 300px; width: 100%; border-radius: 12px; overflow: hidden; }
     .map-marker.leaflet-marker-icon { background: none !important; border: none !important; }
     .map-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem; color: #666; flex-wrap: wrap; }
@@ -2304,7 +2305,7 @@
         ${fixLocationModalHtml}
         <main id="main" class="app-content" role="main">
           <div id="ptr-indicator" class="ptr-indicator" aria-live="polite"><span class="ptr-spinner"></span><span class="ptr-text">Pull to refresh</span></div>
-          <div class="app-content-inner">${mainContent}</div>
+          <div class="app-content-inner ${state.tab==='map'?'map-view':''}">${mainContent}</div>
         </main>
       `;
       if (savedNetworkSearch !== null && savedNetworkSearch !== undefined) {
