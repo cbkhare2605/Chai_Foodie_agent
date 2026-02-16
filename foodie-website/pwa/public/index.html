@@ -663,6 +663,12 @@
         Math.abs(x.lat - r.lat) < 0.01 && Math.abs(x.lng - r.lng) < 0.01 && x.by !== r.by
       ).map(x => x.by))];
     }
+    function getReviewsAtLocation(r) {
+      if (!r) return [];
+      return state.reviews.filter(x =>
+        Math.abs(x.lat - r.lat) < 0.01 && Math.abs(x.lng - r.lng) < 0.01
+      );
+    }
     function isSaved(r) { return state.saved.includes(getSavedKey(r)); }
     function getPrivateNote(reviewId) { return (state.privateNotes || {})[reviewId] || ''; }
     async function setPrivateNote(reviewId, text) { if (!state.privateNotes) state.privateNotes = {}; state.privateNotes[reviewId] = (text || '').trim(); if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.setPrivateNote(reviewId, (text || '').trim()); } catch (e) { console.warn(e); } } else saveToStorage(); render(); }
@@ -1420,9 +1426,9 @@
               </div>
               <div class="review-date">${formatDate(r.date)}</div>
               <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${escapeHtml(r.restaurant)}" title="${(()=>{const a=getAlsoReviewedBy(r); return a.length ? 'Also reviewed by '+a.join(', ') : ''})()}">${escapeHtml((r.restaurant||'').substring(0,60))}${(r.restaurant||'').length>60?'...':''}</div>
-              ${mutualCount > 0 ? `<div class="mutual-connections">${mutualCount} ${mutualCount===1?'friend':'friends'} also reviewed this</div>` : ''}
+              ${mutualCount > 0 ? `<div class="mutual-connections" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal('${r.id}')" title="${(getAlsoReviewedBy(r)).join(', ')}">${mutualCount} ${mutualCount===1?'friend':'friends'} also reviewed this</div>` : ''}
               ${(()=>{const alsoBy=getAlsoReviewedBy(r); return alsoBy.length>0 ? `<div style="padding:2px 0;font-size:0.8rem;color:#666;cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal('${r.id}')" title="${alsoBy.join(', ')}">Also reviewed by ${alsoBy.slice(0,3).join(', ')}${alsoBy.length>3?' and '+(alsoBy.length-3)+' more':''}</div>` : ''})()}
-              ${networkScore && networkScore.count > 0 ? `<div class="network-score" style="font-size:0.8rem;color:#333;margin-top:4px;font-weight:500">Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</div>` : ''}
+              ${networkScore && networkScore.count > 0 ? `<div class="network-score" style="font-size:0.8rem;color:#333;margin-top:4px;font-weight:500;${networkScore.count>1?'cursor:pointer;text-decoration:underline;text-underline-offset:2px':''}" ${networkScore.count>1?`onclick="showReviewersModal('${r.id}')" title="View reviewers"`:''}>Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</div>` : ''}
               ${(r.cuisine||r.price) ? `<div style="font-size:0.75rem;color:#666;margin-top:2px">${escapeHtml(r.cuisine||'')} ${PRICE_LABELS[(r.price||2)-1]||''}</div>` : ''}
             </div>
           </div>
@@ -1473,8 +1479,10 @@
     function closeLikersModal() { state.viewLikersReviewId = null; render(); }
     function showReviewersModal(reviewId) {
       const r = state.reviews.find(x => x.id === reviewId);
+      if (!r) return;
       const reviewers = getAlsoReviewedBy(r);
-      if (!r || !reviewers.length) return;
+      const atLoc = getReviewsAtLocation(r);
+      if (!reviewers.length && atLoc.length < 2) return;
       state.viewReviewersReviewId = reviewId;
       render();
     }
@@ -1934,10 +1942,20 @@
       const reviewersModalHtml = state.viewReviewersReviewId ? (() => {
         const r = state.reviews.find(x => x.id === state.viewReviewersReviewId);
         const reviewers = getAlsoReviewedBy(r);
+        const atLoc = r ? getReviewsAtLocation(r) : [];
+        let body = '';
+        if (reviewers.length) {
+          body = reviewers.map(n=>{const av=getSafeAvatarUrl(state.profiles[n]);return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f9f9f9;border-radius:8px"><span class="review-avatar" style="width:36px;height:36px;font-size:0.9rem${av?';background-image:url('+av+');background-size:cover;background-position:center' : ''}">${av?'':getInitials(n)}</span><span style="font-weight:500">${escapeHtml(n)}</span></div>`}).join('');
+        } else if (atLoc.length >= 2) {
+          const byCount = {};
+          atLoc.forEach(rev => { byCount[rev.by] = (byCount[rev.by]||0) + 1; });
+          const names = Object.keys(byCount);
+          body = names.map(n=>{const av=getSafeAvatarUrl(state.profiles[n]);const c=byCount[n];return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f9f9f9;border-radius:8px"><span class="review-avatar" style="width:36px;height:36px;font-size:0.9rem${av?';background-image:url('+av+');background-size:cover;background-position:center' : ''}">${av?'':getInitials(n)}</span><span style="font-weight:500">${escapeHtml(n)}</span>${c>1?` <span style="color:#666;font-size:0.9rem">(${c} reviews)</span>`:''}</div>`}).join('');
+        }
         return `<div class="menu-overlay" onclick="closeReviewersModal()" style="z-index:150"></div>
         <div style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:white;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:320px;width:90%;max-height:70vh;overflow:auto;z-index:151;padding:20px">
           <h3 style="margin:0 0 16px 0;font-size:1.1rem">Also reviewed ${escapeHtml(r?.restaurant||'this place')}</h3>
-          <div style="display:flex;flex-direction:column;gap:8px">${reviewers.map(n=>{const av=getSafeAvatarUrl(state.profiles[n]);return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f9f9f9;border-radius:8px"><span class="review-avatar" style="width:36px;height:36px;font-size:0.9rem${av?';background-image:url('+av+');background-size:cover;background-position:center' : ''}">${av?'':getInitials(n)}</span><span style="font-weight:500">${escapeHtml(n)}</span></div>`}).join('')}</div>
+          <div style="display:flex;flex-direction:column;gap:8px">${body}</div>
           <button onclick="closeReviewersModal()" style="margin-top:16px;padding:10px 20px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;width:100%">Close</button>
         </div>`;
       })() : '';
