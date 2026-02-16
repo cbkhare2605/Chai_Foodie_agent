@@ -901,9 +901,16 @@
         for (const m of (state.createGroupMembers || [])) {
           try { await api.addGroupMemberByName(id, m); } catch (e) { console.warn('Could not add', m, e); }
         }
-        await refreshFeed();
+        const memberNames = [state.user.displayName, ...(state.createGroupMembers || [])];
+        const newGroup = { id, name, createdBy: state.user.displayName, memberNames };
+        state.groups = state.groups || [];
+        state.groups.push(newGroup);
         state.groupsPanel = 'detail'; state.selectedGroupId = id; state.createGroupName = ''; state.createGroupMembers = [];
         render();
+        refreshFeed().then(() => {
+          if (!(state.groups || []).some(g => g.id === id)) state.groups.push(newGroup);
+          render();
+        });
       } catch (e) { alert(e.message || 'Could not create group'); }
     }
     async function addMemberToGroup(groupId, displayName) {
