@@ -1902,6 +1902,7 @@
           (state.panel === 'myreviews' ? `<div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>` : '') +
           (state.panel === 'main' ? `<div class="feed-search" style="display:flex;gap:8px;align-items:center"><input type="text" id="feedSearchInput" placeholder="Search reviews, restaurants, or people..." value="${(state.feedSearch||'').replace(/"/g,'&quot;')}" oninput="state.feedSearch=this.value; updateFeedCards()" style="flex:1">${window.FOODIE_API?.enabled ? `<button onclick="refreshFeed()" title="Refresh from server" style="padding:10px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1.1rem">↻</button>` : ''}</div>
             <div id="feedStats" style="font-size:0.9rem;color:#666;margin-bottom:12px">${(()=>{const list=getFilteredReviews();const l1=list.filter(r=>getEffectiveLevel(r)===1).length;const l2=list.filter(r=>getEffectiveLevel(r)===2).length;return list.length+' reviews'+(l1||l2?' · 1st: '+l1+' · 2nd: '+l2:'');})()}</div>
+            ${window.FOODIE_API?.enabled ? `<button onclick="setTab('groups')" style="margin-bottom:12px;padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:500">👥 Groups ${(state.groups||[]).length ? '('+(state.groups||[]).length+')' : ''}</button>` : ''}
             <div class="feed-filters">
               <select onchange="state.feedCuisine=this.value; updateFeedCards()" style="padding:8px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem">
                 <option value="">All cuisines</option>${CUISINES.map(c=>`<option value="${c}" ${state.feedCuisine===c?'selected':''}>${c}</option>`).join('')}
@@ -2090,6 +2091,7 @@
             <button class="tab ${state.tab==='feed'?'active':''}" onclick="setTab('feed')">📋 Feed</button>
             <button class="tab ${state.tab==='add'?'active':''}" onclick="setTab('add')">➕ Add</button>
             <button class="tab ${state.tab==='network'?'active':''}" onclick="setTab('network')">👥 Network</button>
+            ${window.FOODIE_API?.enabled ? `<button class="tab ${state.tab==='groups'?'active':''}" onclick="setTab('groups')">👥 Groups</button>` : ''}
             <button class="tab ${state.tab==='map'?'active':''}" onclick="setTab('map')">📍 Map</button>
           </nav>
         </div>
@@ -2223,7 +2225,7 @@
       Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
       render();
     }
-    function setTab(t) { state.tab = t; state.panel = t === 'network' ? 'network' : 'main'; if (t !== 'add') state.editingReview = null; render(); if (t === 'map') setTimeout(initMap, 200); if (t === 'add') { loadNsfwModel(); requestUserLocationIfNeeded(); } }
+    function setTab(t) { state.tab = t; state.panel = t === 'network' ? 'network' : (t === 'groups' ? 'groups' : 'main'); if (t !== 'add') state.editingReview = null; render(); if (t === 'map') setTimeout(initMap, 200); if (t === 'add') { loadNsfwModel(); requestUserLocationIfNeeded(); } }
     function filterMap(f) { state.mapFilter = f; render(); setTimeout(function(){ if (state.tab === 'map') initMap(); }, 150); }
     function setRating(n) { state.rating = n; render(); }
 
