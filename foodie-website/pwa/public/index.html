@@ -193,9 +193,9 @@
     </div>
     <div id="cameraError" class="camera-error" style="display:none"></div>
   </div>
-  <script src="config.js?v=4"></script>
+  <script src="config.js?v=5"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="foodie-api.js?v=4"></script>
+  <script src="foodie-api.js?v=5"></script>
   <script>
     function formatDate(ts) {
       const sec = (Date.now() - ts) / 1000, m = sec/60, h = m/60, d = h/24;
@@ -687,7 +687,7 @@
 
     async function toggleLike(id) {
       const r = state.reviews.find(x => x.id === id);
-      if (!r || !state.user) return;
+      if (!r) return;
       const add = !r.liked;
       if (!r.likedBy) r.likedBy = [];
       if (add) {
@@ -721,7 +721,7 @@
     }
     async function addComment(reviewId, text) {
       const t = (text || '').trim().slice(0, MAX_COMMENT_TEXT);
-      if (!t || !state.user) return;
+      if (!t) return;
       if (!state.comments[reviewId]) state.comments[reviewId] = [];
       state.comments[reviewId].push({ id: Date.now().toString(), by: state.user.displayName, text: t, date: Date.now() });
       const r = state.reviews.find(x => x.id === reviewId);
@@ -961,7 +961,7 @@
       if (window.FOODIE_API?.enabled) await refreshFeed(); else render();
     }
     async function sendConnectionRequest(toName) {
-      if (!toName || !toName.trim() || !state.user) return;
+      if (!toName || !toName.trim()) return;
       const from = state.user.displayName;
       const to = toName.trim();
       if (from === to) return;
@@ -979,7 +979,6 @@
       render();
     }
     async function acceptConnectionRequest(reqId) {
-      if (!state.user) return;
       const req = (state.connectionRequests || []).find(r => r.id === reqId && r.to === state.user.displayName && r.status === 'pending');
       if (!req) return;
       req.status = 'accepted';
@@ -993,7 +992,6 @@
       render();
     }
     async function ignoreConnectionRequest(reqId) {
-      if (!state.user) return;
       const req = (state.connectionRequests || []).find(r => r.id === reqId && r.to === state.user.displayName);
       if (req) { req.status = 'ignored'; if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.ignoreConnectionRequest(reqId); } catch (e) { console.warn(e); } } else saveToStorage(); render(); }
     }
@@ -1005,7 +1003,6 @@
       render();
     }
     async function removeConnection(name) {
-      if (!state.user) return;
       const uid = state.user.displayName;
       if (state.connections[uid]) {
         state.connections[uid] = state.connections[uid].filter(c => c !== name);
@@ -1480,7 +1477,6 @@
     }
 
     async function addReview() {
-      if (!state.user) return;
       const text = ((document.querySelector('.add-review-textarea') || {}).value || state.reviewText || '').trim();
       if (!text || state.rating < 1) { alert('Please add a rating and write your review.'); return; }
       if (text.length > MAX_REVIEW_TEXT) { alert('Review is too long. Please keep it under ' + MAX_REVIEW_TEXT + ' characters.'); return; }
