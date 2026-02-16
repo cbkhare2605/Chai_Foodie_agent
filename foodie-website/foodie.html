@@ -618,9 +618,10 @@
 
     function getSavedKey(r) { return (r.lat + ',' + r.lng + '|' + (r.restaurant||'')).slice(0,80); }
     function getAlsoReviewedBy(r) {
-      const key = getSavedKey(r);
-      if (!key) return [];
-      return [...new Set(state.reviews.filter(x => getSavedKey(x) === key && x.by !== r.by).map(x => x.by))];
+      if (!r) return [];
+      return [...new Set(state.reviews.filter(x =>
+        Math.abs(x.lat - r.lat) < 0.01 && Math.abs(x.lng - r.lng) < 0.01 && x.by !== r.by
+      ).map(x => x.by))];
     }
     function isSaved(r) { return state.saved.includes(getSavedKey(r)); }
     function getPrivateNote(reviewId) { return (state.privateNotes || {})[reviewId] || ''; }
