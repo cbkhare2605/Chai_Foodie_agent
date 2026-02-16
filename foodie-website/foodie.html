@@ -735,16 +735,20 @@
       navigator.clipboard.writeText(url).then(() => alert('Link copied! Share it with friends.')).catch(() => prompt('Copy this link:', url));
     }
 
-    async function shareApp() {
+    async function shareApp(inviteMode) {
       const baseUrl = location.href.split('?')[0].replace(/\/index\.html$/i, '/');
       const appUrl = baseUrl + (state.user?.displayName ? '?connect=' + encodeURIComponent(state.user.displayName) : '');
-      const message = 'Check out Foodie – restaurant reviews from people you trust. Add to your home screen for the best experience (iPhone: tap Share → Add to Home Screen; Android: tap menu ⋮ → Add to Home Screen). ' + appUrl;
+      const name = state.user?.displayName || 'A friend';
+      const shareText = inviteMode
+        ? name + ' wants to connect with you on Foodie – restaurant reviews from people you trust. Open the link and sign up to get started.'
+        : 'Check out Foodie – restaurant reviews from people you trust. Add to your home screen for the best experience (iPhone: Share → Add to Home Screen; Android: menu ⋮ → Add to Home Screen).';
+      const message = shareText + ' ' + appUrl;
       closeMenu();
       try {
         if (navigator.share) {
           await navigator.share({
-            title: 'Foodie',
-            text: 'Check out Foodie – restaurant reviews from people you trust. Add to your home screen for the best experience (iPhone: Share → Add to Home Screen; Android: menu ⋮ → Add to Home Screen).',
+            title: inviteMode ? name + ' invited you to Foodie' : 'Foodie',
+            text: shareText,
             url: appUrl
           });
           showListToast('Shared!');
@@ -1857,13 +1861,15 @@
         mainContent = `<div class="main">
           <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
           <h2 style="margin-bottom:20px">Network</h2>
-          <p style="font-size:0.9rem;color:#666;margin-bottom:16px">Connect with people you know to see their restaurant reviews. Add friends who aren't on Foodie yet—they'll get your request when they sign up.</p>
-          <button onclick="shareApp()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 20px;margin-bottom:24px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:500">📤 Share app with friends</button>
-          <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Invite someone you know</h3>
-          <p style="font-size:0.85rem;color:#666;margin-bottom:8px">Type a name to send a connection request. Works even if they're not on the app yet.</p>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:16px">Connect with people you know to see their restaurant reviews.</p>
+          <h3 style="margin-bottom:8px;font-size:1rem;color:#333">Invite friends not on Foodie</h3>
+          <p style="font-size:0.85rem;color:#666;margin-bottom:12px">Share a link via WhatsApp, Messages, or email. When they sign up, they'll get your connection request.</p>
+          <button onclick="shareApp(true)" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 20px;margin-bottom:24px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:500">📤 Invite via link</button>
+          <h3 style="margin-bottom:8px;font-size:1rem;color:#333">Connect with someone on Foodie</h3>
+          <p style="font-size:0.85rem;color:#666;margin-bottom:8px">Type their display name (exact match) to send a connection request.</p>
           <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap">
             <input type="text" id="inviteNameInput" placeholder="e.g. John, Priya Sharma" value="${(state.addConnectionInput||'').replace(/"/g,'&quot;')}" oninput="state.addConnectionInput=this.value" style="flex:1;min-width:180px;padding:12px 16px;border:1px solid #ddd;border-radius:8px;font-size:1rem">
-            <button onclick="var n=document.getElementById('inviteNameInput')?.value?.trim(); if(n){sendConnectionRequest(n); state.addConnectionInput=''; if(n)document.getElementById('inviteNameInput').value=''; render()}" style="padding:12px 20px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Send invite</button>
+            <button onclick="var n=document.getElementById('inviteNameInput')?.value?.trim(); if(n){sendConnectionRequest(n); state.addConnectionInput=''; if(n)document.getElementById('inviteNameInput').value=''; render()}" style="padding:12px 20px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Send request</button>
           </div>
           ${pendingForMe.length ? `
           <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Invitations (${pendingForMe.length})</h3>
