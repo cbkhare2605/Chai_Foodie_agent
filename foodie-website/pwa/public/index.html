@@ -2541,11 +2541,14 @@
     window.showRestaurantOnMap = showRestaurantOnMap;
     window.openFixLocationModal = openFixLocationModal;
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js?v=4').then(reg => {
+      navigator.serviceWorker.getRegistrations().then(regs => { regs.forEach(r => r.unregister()); });
+      /* SW disabled temporarily to fix loading - re-enable when stable
+      navigator.serviceWorker.register('sw.js?v=5').then(reg => {
         setInterval(() => reg.update(), 30 * 60 * 1000);
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
       }).catch(() => {});
       navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+      */
     }
     bootstrapApp();
     window.addEventListener('popstate', () => { const p = new URLSearchParams(location.search); if (p.get('review')) handleDeepLink(); });
