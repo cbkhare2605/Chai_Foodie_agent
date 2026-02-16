@@ -145,7 +145,7 @@
     .filter-btn:nth-child(4) { background: #ff8d00; }
     .filter-active { box-shadow: inset 0 0 0 3px white; }
     #map-container { height: 420px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; }
-    #restaurant-detail-map { height: 200px; width: 100%; border-radius: 12px; overflow: hidden; margin-top: 12px; }
+    #fix-location-map { height: 300px; width: 100%; border-radius: 12px; overflow: hidden; }
     .map-marker.leaflet-marker-icon { background: none !important; border: none !important; }
     .map-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem; color: #666; flex-wrap: wrap; }
     .map-controls { position: absolute; top: 12px; right: 12px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
@@ -369,7 +369,8 @@
       pendingConnect: null,
       authMode: 'signup',
       viewLikersReviewId: null,
-      viewReviewersReviewId: null
+      viewReviewersReviewId: null,
+      fixLocationModal: null
     };
     async function bootstrapApp() {
       const hashParams = new URLSearchParams((location.hash || '').replace(/^#/, ''));
@@ -760,6 +761,14 @@
 
     function viewRestaurantDetail(restaurant, lat, lng) {
       state.viewRestaurant = { name: restaurant, lat, lng };
+      state.mapFocusRestaurant = { name: restaurant, lat, lng };
+      state.tab = 'map';
+      state.panel = 'main';
+      render();
+      setTimeout(initMap, 50);
+    }
+    function viewRestaurantReviews(restaurant, lat, lng) {
+      state.viewRestaurant = { name: restaurant, lat, lng };
       state.panel = 'restaurant';
       render();
     }
@@ -767,28 +776,54 @@
       state.mapFocusRestaurant = { name, lat, lng };
       setTab('map');
     }
-    function initRestaurantDetailMap() {
-      const el = document.getElementById('restaurant-detail-map');
-      if (!el || !state.viewRestaurant || typeof L === 'undefined') return;
-      try { if (restaurantDetailMap) restaurantDetailMap.remove(); } catch (e) {}
-      restaurantDetailMap = L.map('restaurant-detail-map').setView([state.viewRestaurant.lat, state.viewRestaurant.lng], 14);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(restaurantDetailMap);
-      L.marker([state.viewRestaurant.lat, state.viewRestaurant.lng]).addTo(restaurantDetailMap).bindPopup(escapeHtml(state.viewRestaurant.name||''));
+    function openFixLocationModal(restaurantName, oldLat, oldLng) {
+      state.fixLocationModal = { restaurantName, oldLat, oldLng, pinLat: oldLat, pinLng: oldLng };
+      render();
+      setTimeout(initFixLocationMap, 100);
     }
-    async function fixLocationForRestaurant(restaurantName, oldLat, oldLng) {
-      const btn = document.getElementById('fixLocationBtn');
-      if (btn) { btn.disabled = true; btn.textContent = 'Looking up...'; }
-      const loc = state.userLocation || null;
-      const geocoded = await geocodePlace(restaurantName, loc?.lat, loc?.lng);
-      if (!geocoded) { if (btn) { btn.disabled = false; btn.textContent = '🔧 Fix location'; } alert('Could not find location. Try editing the review with the full address including city and state.'); return; }
+    function closeFixLocationModal() {
+      state.fixLocationModal = null;
+      if (fixLocationMap) { try { fixLocationMap.remove(); } catch (e) {} fixLocationMap = null; }
+      render();
+    }
+    let fixLocationMap = null;
+    let fixLocationMarker = null;
+    function initFixLocationMap() {
+      const m = state.fixLocationModal;
+      if (!m || !document.getElementById('fix-location-map') || typeof L === 'undefined') return;
+      try { if (fixLocationMap) fixLocationMap.remove(); } catch (e) {}
+      fixLocationMap = L.map('fix-location-map').setView([m.pinLat, m.pinLng], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(fixLocationMap);
+      fixLocationMarker = L.marker([m.pinLat, m.pinLng], { draggable: true }).addTo(fixLocationMap);
+      fixLocationMarker.on('dragend', function() {
+        const pos = fixLocationMarker.getLatLng();
+        state.fixLocationModal.pinLat = pos.lat;
+        state.fixLocationModal.pinLng = pos.lng;
+      });
+      fixLocationMap.on('click', function(e) {
+        fixLocationMarker.setLatLng(e.latlng);
+        state.fixLocationModal.pinLat = e.latlng.lat;
+        state.fixLocationModal.pinLng = e.latlng.lng;
+      });
+    }
+    async function confirmFixLocationPin() {
+      const m = state.fixLocationModal;
+      if (!m) return;
+      const { restaurantName, oldLat, oldLng, pinLat, pinLng } = m;
       const toUpdate = state.reviews.filter(r => Math.abs(r.lat - oldLat) < 0.01 && Math.abs(r.lng - oldLng) < 0.01);
       for (const r of toUpdate) {
-        r.lat = geocoded.lat; r.lng = geocoded.lng;
+        r.lat = pinLat; r.lng = pinLng;
         if (window.FOODIE_API?.enabled) try { await window.FOODIE_API.saveReview(r); } catch (e) { console.warn(e); }
       }
       if (!window.FOODIE_API?.enabled) saveToStorage();
-      if (state.viewRestaurant && Math.abs(state.viewRestaurant.lat - oldLat) < 0.01 && Math.abs(state.viewRestaurant.lng - oldLng) < 0.01) state.viewRestaurant = { ...state.viewRestaurant, lat: geocoded.lat, lng: geocoded.lng };
+      if (state.viewRestaurant && Math.abs(state.viewRestaurant.lat - oldLat) < 0.01 && Math.abs(state.viewRestaurant.lng - oldLng) < 0.01) state.viewRestaurant = { ...state.viewRestaurant, lat: pinLat, lng: pinLng };
+      state.mapFocusRestaurant = state.mapFocusRestaurant && Math.abs(state.mapFocusRestaurant.lat - oldLat) < 0.01 ? { ...state.mapFocusRestaurant, lat: pinLat, lng: pinLng } : state.mapFocusRestaurant;
+      closeFixLocationModal();
       render();
+      if (state.tab === 'map') setTimeout(initMap, 50);
+    }
+    async function fixLocationForRestaurant(restaurantName, oldLat, oldLng) {
+      openFixLocationModal(restaurantName, oldLat, oldLng);
     }
 
     async function sendConnectionRequest(toName) {
@@ -1726,9 +1761,8 @@
             <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;align-items:center">
               <a href="https://www.google.com/maps?q=${vr.lat},${vr.lng}" target="_blank" rel="noopener" style="color:#0a66c2;font-size:0.9rem">📍 Get directions</a>
               <button onclick="showRestaurantOnMap('${(vr.name||'').replace(/'/g,"\\'")}', ${vr.lat}, ${vr.lng})" style="padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">📍 View on map</button>
-              ${(looksWrong || hasOwnReview) ? `<button id="fixLocationBtn" onclick="fixLocationForRestaurant('${(vr.name||'').replace(/'/g,"\\'")}', ${vr.lat}, ${vr.lng})" style="padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">🔧 Fix location</button>` : ''}
+              ${(looksWrong || hasOwnReview) ? `<button onclick="openFixLocationModal('${(vr.name||'').replace(/'/g,"\\'")}', ${vr.lat}, ${vr.lng})" style="padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">🔧 Fix location</button>` : ''}
             </div>
-            <div id="restaurant-detail-map"></div>
           </div>
           <h3 style="margin-bottom:12px">Reviews</h3>
           ${restReviews.length ? restReviews.map(r=>renderReviewCard(r)).join('') : '<p style="color:#666">No reviews yet.</p>'}
@@ -1900,6 +1934,19 @@
           <button onclick="closeReviewersModal()" style="margin-top:16px;padding:10px 20px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;width:100%">Close</button>
         </div>`;
       })() : '';
+      const fixLocationModalHtml = state.fixLocationModal ? (() => {
+        const m = state.fixLocationModal;
+        return `<div class="menu-overlay" onclick="closeFixLocationModal()" style="z-index:150"></div>
+        <div style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:white;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:400px;width:95%;z-index:151;padding:20px">
+          <h3 style="margin:0 0 8px 0;font-size:1.1rem">Set location for ${escapeHtml(m.restaurantName||'').slice(0,40)}</h3>
+          <p style="margin:0 0 12px 0;font-size:0.9rem;color:#666">Drag the pin or click on the map to set the correct location.</p>
+          <div id="fix-location-map"></div>
+          <div style="display:flex;gap:12px;margin-top:16px">
+            <button onclick="confirmFixLocationPin()" style="flex:1;padding:12px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Confirm</button>
+            <button onclick="closeFixLocationModal()" style="flex:1;padding:12px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer">Cancel</button>
+          </div>
+        </div>`;
+      })() : '';
       app.innerHTML = `
         <div class="top-bar">
           <div class="header">
@@ -1916,6 +1963,7 @@
         ${sidebarHtml}
         ${likersModalHtml}
         ${reviewersModalHtml}
+        ${fixLocationModalHtml}
         <main id="main" class="app-content" role="main">
           <div class="app-content-inner">${mainContent}</div>
           <aside class="ad-strip" aria-label="Advertisement">
@@ -1932,11 +1980,9 @@
           </aside>
         </main>
       `;
-      if (state.panel === 'restaurant' && state.viewRestaurant) setTimeout(initRestaurantDetailMap, 50);
     }
 
     let map = null;
-    let restaurantDetailMap = null;
     let markers = [];
     let markerCluster = null;
     let userLocationMarker = null;
@@ -2076,7 +2122,8 @@
           '<span style="font-size:0.85rem;color:#666">' + cuisineStr + ' · ' + priceStr + '</span><br>' +
           '<span style="font-size:0.85rem">' + (r.avgRating !== '-' ? r.avgRating + ' ★' : '-') + ' · ' + (r.reviews?.length||0) + ' review' + ((r.reviews?.length||0)===1?'':'s') + '</span><br>' +
           '<a href="' + dirUrl + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#0a66c2;color:white;border-radius:6px;text-decoration:none;font-size:0.9rem">Get directions</a> ' +
-          '<button onclick="window.viewRestaurantDetail(\'' + (r.name||'').replace(/'/g,"\\'") + '\', ' + r.lat + ', ' + r.lng + ')" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">View details</button>' +
+          '<button onclick="window.viewRestaurantReviews(\'' + (r.name||'').replace(/'/g,"\\'") + '\', ' + r.lat + ', ' + r.lng + ')" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">View details</button> ' +
+          '<button onclick="window.openFixLocationModal(\'' + (r.name||'').replace(/'/g,"\\'") + '\', ' + r.lat + ', ' + r.lng + ')" style="margin-top:8px;padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Fix location</button>' +
           '</div>';
       }
       if (typeof L !== 'undefined' && L.markerClusterGroup) {
@@ -2134,7 +2181,7 @@
         if (m) setTimeout(function(){ m.openPopup(); }, 300);
         else {
           const dirUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + f.lat + ',' + f.lng;
-          L.popup().setLatLng([f.lat, f.lng]).setContent('<div class="map-popup" style="min-width:180px"><strong>' + escapeHtml(f.name||'') + '</strong><br><a href="' + dirUrl + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#0a66c2;color:white;border-radius:6px;text-decoration:none;font-size:0.9rem">Get directions</a> <button onclick="window.viewRestaurantDetail(\'' + (f.name||'').replace(/'/g,"\\'") + '\', ' + f.lat + ', ' + f.lng + ')" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">View details</button></div>').openOn(map);
+          L.popup().setLatLng([f.lat, f.lng]).setContent('<div class="map-popup" style="min-width:180px"><strong>' + escapeHtml(f.name||'') + '</strong><br><a href="' + dirUrl + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#0a66c2;color:white;border-radius:6px;text-decoration:none;font-size:0.9rem">Get directions</a> <button onclick="window.viewRestaurantReviews(\'' + (f.name||'').replace(/'/g,"\\'") + '\', ' + f.lat + ', ' + f.lng + ')" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">View details</button> <button onclick="window.openFixLocationModal(\'' + (f.name||'').replace(/'/g,"\\'") + '\', ' + f.lat + ', ' + f.lng + ')" style="margin-top:8px;padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Fix location</button></div>').openOn(map);
         }
         state.mapFocusRestaurant = null;
       }
@@ -2176,7 +2223,9 @@
     }
 
     window.viewRestaurantDetail = viewRestaurantDetail;
+    window.viewRestaurantReviews = viewRestaurantReviews;
     window.showRestaurantOnMap = showRestaurantOnMap;
+    window.openFixLocationModal = openFixLocationModal;
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').then(reg => {
         setInterval(() => reg.update(), 30 * 60 * 1000);
