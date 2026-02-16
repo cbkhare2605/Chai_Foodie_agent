@@ -53,15 +53,6 @@
       supabase.from('group_members').select('group_id, user_id')
     ]);
 
-    const groupsDebug = {
-      userId: user.id,
-      displayName,
-      groupsRaw: groupsRes.data,
-      groupsError: groupsRes.error?.message || null,
-      groupMembersRaw: groupMembersRes.data,
-      groupMembersError: groupMembersRes.error?.message || null
-    };
-
     const profileById = {};
     (profilesRes.data || []).forEach(p => { profileById[p.id] = p; });
 
@@ -189,8 +180,7 @@
       privateNotes,
       groupLists,
       trustScores: {},
-      groups,
-      groupsDebug
+      groups
     };
   }
 

@@ -53,15 +53,6 @@
       supabase.from('group_members').select('group_id, user_id')
     ]);
 
-    const groupsDebug = {
-      userId: user.id,
-      displayName,
-      groupsRaw: groupsRes.data,
-      groupsError: groupsRes.error?.message || null,
-      groupMembersRaw: groupMembersRes.data,
-      groupMembersError: groupMembersRes.error?.message || null
-    };
-
     const profileById = {};
     (profilesRes.data || []).forEach(p => { profileById[p.id] = p; });
 
@@ -189,8 +180,7 @@
       privateNotes,
       groupLists,
       trustScores: {},
-      groups,
-      groupsDebug
+      groups
     };
   }
 
@@ -380,6 +370,12 @@
     await supabase.from('connection_requests').update({ status: 'ignored' }).eq('id', reqId).eq('to_user', user.id);
   }
 
+  async function cancelConnectionRequest(reqId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('connection_requests').update({ status: 'cancelled' }).eq('id', reqId).eq('from_user', user.id);
+  }
+
   async function removeConnection(otherDisplayName) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -453,6 +449,7 @@
     sendConnectionRequest,
     acceptConnectionRequest,
     ignoreConnectionRequest,
+    cancelConnectionRequest,
     removeConnection,
     toggleSave,
     setPrivateNote,

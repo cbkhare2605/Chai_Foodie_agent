@@ -463,7 +463,6 @@
         state.groupLists = stored.groupLists || {};
         state.trustScores = stored.trustScores || {};
         state.groups = stored.groups || [];
-        state.groupsDebug = stored.groupsDebug || null;
         const serverIds = new Set((stored.groups || []).map(g => g.id));
         state.pendingGroups = (state.pendingGroups || []).filter(pg => {
           if (serverIds.has(pg.id)) return false;
@@ -995,6 +994,13 @@
     async function ignoreConnectionRequest(reqId) {
       const req = (state.connectionRequests || []).find(r => r.id === reqId && r.to === state.user.displayName);
       if (req) { req.status = 'ignored'; if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.ignoreConnectionRequest(reqId); } catch (e) { console.warn(e); } } else saveToStorage(); render(); }
+    }
+    async function cancelConnectionRequest(reqId) {
+      const req = (state.connectionRequests || []).find(r => r.id === reqId && r.from === state.user?.displayName && r.status === 'pending');
+      if (!req) return;
+      req.status = 'cancelled';
+      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.cancelConnectionRequest(reqId); } catch (e) { console.warn(e); } } else saveToStorage();
+      render();
     }
     async function removeConnection(name) {
       const uid = state.user.displayName;
@@ -1955,11 +1961,11 @@
           ` : ''}
           ${(getPendingRequestsFromMe()).length ? `
           <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Pending (sent)</h3>
-          <p style="font-size:0.9rem;color:#666;margin-bottom:12px">Waiting for these people to approve your request.</p>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:12px">Waiting for these people to approve your request. Cancel if they haven't responded.</p>
           <div style="margin-bottom:24px">${getPendingRequestsFromMe().map(r=>`
             <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#f9f9f9;border-radius:8px;margin-bottom:8px">
-              <span>${r.to}</span>
-              <span style="font-size:0.85rem;color:#666">Pending</span>
+              <span>${escapeHtml(r.to)}</span>
+              <button onclick="cancelConnectionRequest('${r.id}'); render()" style="padding:6px 12px;background:#999;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">Cancel</button>
             </div>
           `).join('')}</div>
           ` : ''}
@@ -2053,7 +2059,6 @@
           <p style="font-size:0.9rem;color:#666;margin-bottom:16px">Private, invite-only groups. Create a group and add connections to share a smaller feed and map.</p>
           <button onclick="state.groupsPanel='create'; state.createGroupName=''; state.createGroupMembers=[]; render()" style="width:100%;padding:14px 20px;margin-bottom:24px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:500">+ Create group</button>
           ${groups.length ? groups.map(g=>`<div onclick="state.selectedGroupId='${g.id}'; state.groupsPanel='detail'; render()" style="padding:16px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);cursor:pointer"><div style="font-weight:600">${escapeHtml(g.name)}</div><div style="font-size:0.85rem;color:#666;margin-top:4px">${g.memberNames.length} member${g.memberNames.length!==1?'s':''} · by ${escapeHtml(g.createdBy)}</div></div>`).join('') : '<p style="color:#666">No groups yet. Create one to get started.</p>'}
-          <div style="margin-top:24px;padding:12px;background:#f5f5f5;border-radius:8px;font-size:0.8rem"><button onclick="state.groupsDebugVisible=true; refreshFeed()" style="padding:8px 14px;background:#666;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">Refresh &amp; show debug</button>${state.groupsDebugVisible ? (state.groupsDebug ? `<pre style="margin-top:12px;overflow:auto;max-height:200px;white-space:pre-wrap;word-break:break-all">${escapeHtml(JSON.stringify(state.groupsDebug,null,2))}</pre>` : '<p style="margin-top:12px;color:#666">Tap Refresh above, then wait. Debug will appear after load.</p>') : ''}</div>
         </div>`;
         }
       } else if (state.panel === 'feedback') {
