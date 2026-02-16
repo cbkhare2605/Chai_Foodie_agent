@@ -60,6 +60,7 @@ The Software Integrator (or the user acting as Integrator) will:
 | **Software Integrator** | `docs/AGENTS-INTEGRATOR.md` (this file) | Integrate agents; maintain `PROJECT-CONTEXT.md`; cross-agent awareness |
 | **Document creator** | `docs/AGENTS-DOCUMENT-CREATOR.md` | Docs, SOPs, quality standards, document index |
 | **Chemical Engineer** | `docs/AGENTS-CHEMICAL-ENGINEER.md` | Design, analysis, feasibility of chemical plants; manufacturing intelligence |
+| **QA / Bug Hunter** | `docs/AGENTS-QA-BUG-HUNTER.md` | Find and fix bugs in Foodie app; proactive QA pass |
 
 When you add a new agent, add a row here and create (or link) its `docs/AGENTS-<NAME>.md`. Update `docs/README.md` so the new doc is in the index.
 

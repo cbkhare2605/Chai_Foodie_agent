@@ -84,6 +84,24 @@
 - **Where:** `docs/PROJECT-SERVICES.md`, `docs/PROJECT-CONTEXT.md`.
 - **Decisions / notes:** Add your Vercel live URL to `docs/PROJECT-SERVICES.md` when you have it.
 
+### 2025-02-12 — Data retention and groups persistence
+
+- **What:** Groups persist when creator deletes account (created_by set null). Reviews use soft delete; kept 8 weeks for others who rely on them. Migration: `001-data-retention-and-groups-persistence.sql`. Policy doc: `foodie-website/docs/DATA-RETENTION-POLICY.md`.
+- **Where:** `foodie-website/supabase/migrations/`, `foodie-website/foodie-api.js`, `foodie-website/docs/DATA-RETENTION-POLICY.md`.
+- **Decisions / notes:** Run migration in Supabase SQL Editor after schema and groups-schema. Creator-only delete for groups; no hard delete for reviews.
+
+### 2025-02-12 — All agents looped in
+
+- **What:** Added `.cursor/rules/all-agents-loop.mdc` — every conversation reads PROJECT-CONTEXT, checks agent registry, considers which agents to involve, and reports/hands off when done.
+- **Where:** `.cursor/rules/all-agents-loop.mdc`.
+- **Decisions / notes:** Rule has `alwaysApply: true` so it runs in every chat. Keeps work integrated across Integrator, Document creator, Chemical Engineer, QA / Bug Hunter, Executive.
+
+### 2025-02-12 — Groups feature (private, invite-only)
+
+- **What:** Implemented Groups: create groups, add members from connections, group feed (reviews from members only), remove members, leave group, delete group (creator only). Groups are private and invite-only; only members see the group. API: `createGroup`, `addGroupMemberByName`, `removeGroupMember`, `leaveGroup`, `deleteGroup`. Schema: `groups`, `group_members`; RLS in `groups-rls.sql`.
+- **Where:** `foodie-website/foodie.html`, `foodie-website/foodie-api.js`, `foodie-website/supabase/groups-schema.sql`, `foodie-website/supabase/groups-rls.sql`.
+- **Decisions / notes:** Run `groups-schema.sql` and `groups-rls.sql` in Supabase SQL Editor before using. Groups appear in sidebar when Supabase enabled; members are added from connections only.
+
 ---
 
 ## Active areas and owners
@@ -94,6 +112,7 @@
 | Documentation, SOPs, quality | Document creator | `docs/AGENTS-DOCUMENT-CREATOR.md` |
 | Cross-agent context and integration | Software Integrator | `docs/AGENTS-INTEGRATOR.md` |
 | Chemical plant design, analysis, feasibility | Chemical Engineer | `docs/AGENTS-CHEMICAL-ENGINEER.md` |
+| QA, bug finding, Foodie app robustness | QA / Bug Hunter | `docs/AGENTS-QA-BUG-HUNTER.md` |
 
 ---
 

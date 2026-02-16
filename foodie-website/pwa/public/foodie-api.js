@@ -56,13 +56,19 @@
     const profileById = {};
     (profilesRes.data || []).forEach(p => { profileById[p.id] = p; });
 
+    const RETENTION_WEEKS = 8;
+    const retentionMs = RETENTION_WEEKS * 7 * 24 * 60 * 60 * 1000;
+    const visibleReviews = (reviewsRes.data || []).filter(r => {
+      if (!r.deleted_at) return true;
+      return Date.now() - new Date(r.deleted_at).getTime() < retentionMs;
+    });
     const likesByReview = {};
     (likesRes.data || []).forEach(l => {
       if (!likesByReview[l.review_id]) likesByReview[l.review_id] = [];
       const name = profileById[l.user_id]?.display_name;
       if (name) likesByReview[l.review_id].push(name);
     });
-    const allReviews = (reviewsRes.data || []).map(r => {
+    const allReviews = visibleReviews.map(r => {
       const likedBy = likesByReview[r.id] || [];
       return {
         id: r.id,
@@ -144,17 +150,20 @@
     const membersByGroup = {};
     (groupMembersRes.data || []).forEach(gm => {
       if (!membersByGroup[gm.group_id]) membersByGroup[gm.group_id] = [];
-      const name = profileById[gm.user_id]?.display_name;
+      const name = profileById[gm.user_id]?.display_name || (gm.user_id === user.id ? displayName : null);
       if (name) membersByGroup[gm.group_id].push(name);
     });
     (groupsRes.data || []).forEach(g => {
       const memberNames = membersByGroup[g.id] || [];
-      if (memberNames.includes(displayName)) {
+      const isCreator = g.created_by === user.id;
+      const isMemberByName = memberNames.some(m => m && displayName && String(m).trim().toLowerCase() === String(displayName).trim().toLowerCase());
+      if (isCreator || isMemberByName || memberNames.includes(displayName)) {
+        const names = memberNames.length ? memberNames : (isCreator ? [displayName] : []);
         groups.push({
           id: g.id,
           name: g.name,
           createdBy: profileById[g.created_by]?.display_name || 'Unknown',
-          memberNames
+          memberNames: names
         });
       }
     });
@@ -179,9 +188,10 @@
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not logged in');
     const id = 'g_' + crypto.randomUUID().replace(/-/g, '');
-    const { error } = await supabase.from('groups').insert({ id, name, created_by: user.id });
-    if (error) throw error;
-    await supabase.from('group_members').insert({ group_id: id, user_id: user.id });
+    const { error: groupErr } = await supabase.from('groups').insert({ id, name, created_by: user.id });
+    if (groupErr) throw groupErr;
+    const { error: memberErr } = await supabase.from('group_members').insert({ group_id: id, user_id: user.id });
+    if (memberErr) throw memberErr;
     return id;
   }
 
@@ -264,7 +274,10 @@
   }
 
   async function deleteReview(id) {
-    await supabase.from('reviews').delete().eq('id', id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not signed in');
+    const { error } = await supabase.from('reviews').update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_id', user.id);
+    if (error) throw error;
   }
 
   async function fixReviewLocation(reviewId, lat, lng) {

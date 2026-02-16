@@ -19,6 +19,7 @@
 | [Agent coordination (Executive)](./AGENTS-EXECUTIVE.md) | ✅ Current | Executive |
 | [Agent coordination (Software Integrator)](./AGENTS-INTEGRATOR.md) | ✅ Current | Software Integrator |
 | [Agent coordination (Chemical Engineer)](./AGENTS-CHEMICAL-ENGINEER.md) | ✅ Current | Chemical Engineer |
+| [Agent coordination (QA / Bug Hunter)](./AGENTS-QA-BUG-HUNTER.md) | ✅ Current | QA / Bug Hunter |
 | [Project context (cross-agent)](./PROJECT-CONTEXT.md) | ✅ Current | Software Integrator |
 
 **Legend:** ✅ Current | 🔄 In review | 📝 Draft | ❌ Missing
@@ -49,3 +50,4 @@
 | **Executive** | [AGENTS-EXECUTIVE.md](./AGENTS-EXECUTIVE.md) | Accountability, project control |
 | **Software Integrator** | [AGENTS-INTEGRATOR.md](./AGENTS-INTEGRATOR.md) | Compile work, update context, sync awareness |
 | **Chemical Engineer** | [AGENTS-CHEMICAL-ENGINEER.md](./AGENTS-CHEMICAL-ENGINEER.md) | Design, analysis, feasibility, manufacturing intelligence |
+| **QA / Bug Hunter** | [AGENTS-QA-BUG-HUNTER.md](./AGENTS-QA-BUG-HUNTER.md) | Find and fix bugs in Foodie app; proactive QA pass |
