@@ -184,7 +184,8 @@
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
-  <div id="app" role="application" aria-label="Foodie app"></div>
+  <div id="app" role="application" aria-label="Foodie app" style="min-height:200px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;color:#666">Loading Foodie…</div>
+  <noscript><div style="padding:24px;text-align:center">Please enable JavaScript to use Foodie.</div></noscript>
   <div id="cameraModal" class="camera-modal-overlay" aria-label="Camera capture" role="dialog">
     <video id="cameraVideo" autoplay playsinline muted></video>
     <div class="camera-controls">
@@ -193,9 +194,9 @@
     </div>
     <div id="cameraError" class="camera-error" style="display:none"></div>
   </div>
-  <script src="config.js?v=5"></script>
+  <script src="config.js?v=6"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="foodie-api.js?v=5"></script>
+  <script src="foodie-api.js?v=6"></script>
   <script>
     function formatDate(ts) {
       const sec = (Date.now() - ts) / 1000, m = sec/60, h = m/60, d = h/24;
@@ -389,6 +390,7 @@
       fixLocationModal: null
     };
     async function bootstrapApp() {
+      render();
       const hashParams = new URLSearchParams((location.hash || '').replace(/^#/, ''));
       if (hashParams.get('type') === 'recovery') {
         state.authMode = 'reset';
@@ -400,16 +402,20 @@
         await new Promise(function(resolve) {
           var done = false;
           function finish() { if (!done) { done = true; resolve(); } }
-          var t = setTimeout(finish, 4000);
-          var sub = window.FOODIE_API.supabase.auth.onAuthStateChange(function(ev, s) {
-            if (ev === 'INITIAL_SESSION') { clearTimeout(t); if (sub?.unsubscribe) sub.unsubscribe(); finish(); }
-          });
+          var t = setTimeout(finish, 1500);
+          try {
+            var sub = window.FOODIE_API.supabase.auth.onAuthStateChange(function(ev, s) {
+              if (ev === 'INITIAL_SESSION') { clearTimeout(t); if (sub && sub.unsubscribe) sub.unsubscribe(); finish(); }
+            });
+          } catch (e) { finish(); }
         });
       }
       var stored;
       if (window.FOODIE_API && window.FOODIE_API.enabled && window.FOODIE_API.loadData) {
         try {
-          stored = await window.FOODIE_API.loadData();
+          var loadPromise = window.FOODIE_API.loadData();
+          var timeoutPromise = new Promise(function(_, reject) { setTimeout(function() { reject(new Error('Load timeout')); }, 5000); });
+          stored = await Promise.race([loadPromise, timeoutPromise]);
         } catch (e) {
           console.warn('Foodie API load failed, using localStorage', e);
           stored = loadFromStorage();
@@ -1612,6 +1618,31 @@
       return list;
     }
 
+    function getReviewAlsoReviewedHtml(r, mutualCount, networkScore) {
+      const alsoBy = getAlsoReviewedBy(r);
+      if (alsoBy.length > 0) {
+        return '<div style="padding:2px 0;font-size:0.8rem;color:#666;cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal(\'' + r.id + '\')" title="' + escapeHtml(alsoBy.join(', ')) + '">Also reviewed by ' + escapeHtml(alsoBy.slice(0,3).join(', ')) + (alsoBy.length > 3 ? ' and ' + (alsoBy.length - 3) + ' more' : '') + '</div>';
+      }
+      if (mutualCount > 0) {
+        const myName = state.user ? state.user.displayName : null;
+        const connNames = myName ? (state.connections[myName] || []) : [];
+        const names = state.reviews.filter(function(x) {
+          return Math.abs(x.lat - r.lat) < 0.01 && Math.abs(x.lng - r.lng) < 0.01 && x.by !== r.by && connNames.includes(x.by);
+        }).map(function(x) { return x.by; }).join(', ');
+        return '<div class="mutual-connections" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal(\'' + r.id + '\')" title="' + escapeHtml(names) + '">' + mutualCount + ' ' + (mutualCount === 1 ? 'friend' : 'friends') + ' also reviewed this</div>';
+      }
+      if (networkScore && networkScore.count > 0) {
+        var nsStyle = 'font-size:0.8rem;color:#333;margin-top:4px;font-weight:500;';
+        var nsAttrs = '';
+        if (networkScore.count > 1) {
+          nsStyle += 'cursor:pointer;text-decoration:underline;text-underline-offset:2px';
+          nsAttrs = ' onclick="showReviewersModal(\'' + r.id + '\')" title="View reviewers"';
+        }
+        return '<div class="network-score" style="' + nsStyle + '"' + nsAttrs + '>Network: ' + networkScore.avgRating + ' ★ (' + networkScore.count + ' ' + (networkScore.count === 1 ? 'review' : 'reviews') + ')</div>';
+      }
+      return '';
+    }
+
     function renderReviewCard(r) {
       const effLevel = getEffectiveLevel(r);
       const isOwn = (effLevel === 3) || (state.user && r.by === state.user.displayName);
@@ -1637,7 +1668,7 @@
               </div>
               <div class="review-date">${formatDate(r.date)}</div>
               <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${escapeHtml(r.restaurant)}" title="${(()=>{const a=getAlsoReviewedBy(r); return a.length ? 'Also reviewed by '+a.join(', ') : ''})()}">${escapeHtml((r.restaurant||'').substring(0,60))}${(r.restaurant||'').length>60?'...':''}</div>
-              ${(()=>{const alsoBy=getAlsoReviewedBy(r); if(alsoBy.length>0) return `<div style="padding:2px 0;font-size:0.8rem;color:#666;cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal('${r.id}')" title="${alsoBy.join(', ')}">Also reviewed by ${alsoBy.slice(0,3).join(', ')}${alsoBy.length>3?' and '+(alsoBy.length-3)+' more':''}</div>`; if(mutualCount>0) return `<div class="mutual-connections" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal('${r.id}')" title="${(state.reviews.filter(x=>Math.abs(x.lat-r.lat)<0.01&&Math.abs(x.lng-r.lng)<0.01&&x.by!==r.by&&(state.connections[state.user?.displayName]||[]).includes(x.by)).map(x=>x.by).join(', ')}">${mutualCount} ${mutualCount===1?'friend':'friends'} also reviewed this</div>`; if(networkScore&&networkScore.count>0) return `<div class="network-score" style="font-size:0.8rem;color:#333;margin-top:4px;font-weight:500;${networkScore.count>1?'cursor:pointer;text-decoration:underline;text-underline-offset:2px':''}" ${networkScore.count>1?`onclick="showReviewersModal('${r.id}')" title="View reviewers"`:''}>Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</div>`; return ''})()}
+              ${getReviewAlsoReviewedHtml(r, mutualCount, networkScore)}
               ${(r.cuisine||r.price) ? `<div style="font-size:0.75rem;color:#666;margin-top:2px">${escapeHtml(r.cuisine||'')} ${PRICE_LABELS[(r.price||2)-1]||''}</div>` : ''}
             </div>
           </div>
