@@ -380,6 +380,12 @@
     await supabase.from('connection_requests').update({ status: 'ignored' }).eq('id', reqId).eq('to_user', user.id);
   }
 
+  async function cancelConnectionRequest(reqId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('connection_requests').update({ status: 'cancelled' }).eq('id', reqId).eq('from_user', user.id);
+  }
+
   async function removeConnection(otherDisplayName) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -453,6 +459,7 @@
     sendConnectionRequest,
     acceptConnectionRequest,
     ignoreConnectionRequest,
+    cancelConnectionRequest,
     removeConnection,
     toggleSave,
     setPrivateNote,

@@ -996,6 +996,13 @@
       const req = (state.connectionRequests || []).find(r => r.id === reqId && r.to === state.user.displayName);
       if (req) { req.status = 'ignored'; if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.ignoreConnectionRequest(reqId); } catch (e) { console.warn(e); } } else saveToStorage(); render(); }
     }
+    async function cancelConnectionRequest(reqId) {
+      const req = (state.connectionRequests || []).find(r => r.id === reqId && r.from === state.user?.displayName && r.status === 'pending');
+      if (!req) return;
+      req.status = 'cancelled';
+      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.cancelConnectionRequest(reqId); } catch (e) { console.warn(e); } } else saveToStorage();
+      render();
+    }
     async function removeConnection(name) {
       const uid = state.user.displayName;
       if (state.connections[uid]) {
@@ -1955,11 +1962,11 @@
           ` : ''}
           ${(getPendingRequestsFromMe()).length ? `
           <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Pending (sent)</h3>
-          <p style="font-size:0.9rem;color:#666;margin-bottom:12px">Waiting for these people to approve your request.</p>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:12px">Waiting for these people to approve your request. Cancel if they haven't responded.</p>
           <div style="margin-bottom:24px">${getPendingRequestsFromMe().map(r=>`
             <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#f9f9f9;border-radius:8px;margin-bottom:8px">
-              <span>${r.to}</span>
-              <span style="font-size:0.85rem;color:#666">Pending</span>
+              <span>${escapeHtml(r.to)}</span>
+              <button onclick="cancelConnectionRequest('${r.id}'); render()" style="padding:6px 12px;background:#999;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">Cancel</button>
             </div>
           `).join('')}</div>
           ` : ''}
