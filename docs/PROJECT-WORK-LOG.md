@@ -1,7 +1,7 @@
 # Foodie Project – Work Log
 
 **Purpose:** Record of all work done on the Chai Foodie Agent project.  
-**Last updated:** 2025-02-14
+**Last updated:** 2025-02-12
 
 ---
 
@@ -14,6 +14,8 @@
 | 2025-02-14 | PWA | Icons, manifest, service worker, iOS meta tags |
 | 2025-02-14 | Deployment | Vercel/Netlify config, DEPLOY.md, Option C guide |
 | 2025-02-14 | Docs | PROJECT-WORK-LOG, DEPLOY-OPTION-C, .gitignore |
+| 2025-02-12 | Cache | Cache invalidation v4; cancel pending requests; remove groups debug |
+| 2025-02-12 | Groups | RLS fixes (migrations 002–010); pull-to-refresh; people search |
 
 ---
 
@@ -92,6 +94,21 @@
 
 ---
 
+## 7. Recent work (2025-02-12)
+
+| Area | Details |
+|------|---------|
+| Cache invalidation | `?v=4` on scripts; `foodie-v4` SW cache; SYNC-AND-PUSH instructions |
+| Cancel pending requests | Network → Pending (sent) → Cancel; migration 010 |
+| Groups debug removed | "Refresh & show debug" button removed |
+| Groups RLS | Migrations 002–009; creator backfill, auto-member, recursion fixes |
+| Pull-to-refresh | All tabs (Feed, Add, Network, Groups, Map) |
+| People search | LinkedIn-style search in Network; debounced |
+| Version control | `foodie-website/CHANGELOG.md` |
+| QA handoff | `docs/FEATURE-AUDIT-CHECKLIST.md` |
+
+---
+
 ## Key file locations
 
 ```
@@ -99,17 +116,15 @@ Chai_Foodie_agent/
 ├── docs/
 │   ├── PROJECT-CONTEXT.md
 │   ├── PROJECT-WORK-LOG.md
+│   ├── FEATURE-AUDIT-CHECKLIST.md   # QA handoff
 │   └── ...
 ├── foodie-website/
 │   ├── foodie.html          # Main PWA demo
+│   ├── CHANGELOG.md         # Version history
 │   ├── manifest.json
 │   ├── sw.js
-│   ├── vercel.json
-│   ├── netlify.toml
-│   ├── icons/
-│   ├── logo/
-│   ├── DEMO.md
-│   ├── DEPLOY.md
-│   └── DEPLOY-OPTION-C.md
+│   ├── pwa/public/          # Deploy output (setup.sh)
+│   ├── supabase/migrations/ # 001–010
+│   └── ...
 └── .gitignore
 ```

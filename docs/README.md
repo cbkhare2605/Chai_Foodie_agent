@@ -21,6 +21,9 @@
 | [Agent coordination (Chemical Engineer)](./AGENTS-CHEMICAL-ENGINEER.md) | ✅ Current | Chemical Engineer |
 | [Agent coordination (QA / Bug Hunter)](./AGENTS-QA-BUG-HUNTER.md) | ✅ Current | QA / Bug Hunter |
 | [Project context (cross-agent)](./PROJECT-CONTEXT.md) | ✅ Current | Software Integrator |
+| [Project work log](./PROJECT-WORK-LOG.md) | ✅ Current | Software Integrator |
+| [Feature audit checklist (QA handoff)](./FEATURE-AUDIT-CHECKLIST.md) | 📝 Draft | QA / Bug Hunter |
+| [Foodie CHANGELOG](../foodie-website/CHANGELOG.md) | 📝 Draft | Software Integrator |
 
 **Legend:** ✅ Current | 🔄 In review | 📝 Draft | ❌ Missing
 

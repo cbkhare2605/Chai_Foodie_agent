@@ -6,6 +6,46 @@
 
 ---
 
+## Recent work (last few days)
+
+### 2025-02-12 — Cache invalidation for all users
+
+- **What:** Cache-busting added so users get latest code on laptop and mobile. `config.js?v=4`, `foodie-api.js?v=4`, `sw.js?v=4`; service worker cache bumped to `foodie-v4`.
+- **Where:** `foodie-website/foodie.html`, `foodie-website/pwa/public/sw.js`, `foodie-website/SYNC-AND-PUSH.md`.
+- **Decisions / notes:** Bump version in foodie.html and sw.js when deploying fixes that must invalidate old caches.
+
+### 2025-02-12 — Cancel pending connection requests
+
+- **What:** Users can cancel connection requests they sent (e.g. if recipient hasn't accepted). Cancel button in Network → Pending (sent). API: `cancelConnectionRequest(reqId)`; RLS policy for sender to update.
+- **Where:** `foodie-website/foodie.html`, `foodie-website/foodie-api.js`, `supabase/migrations/010-sender-can-cancel-connection-request.sql`.
+- **Decisions / notes:** Run migration 010 in Supabase SQL Editor if not using CLI.
+
+### 2025-02-12 — Groups debug button removed
+
+- **What:** Removed "Refresh & show debug" button from Groups page. `groupsDebug` removed from loadData and state.
+- **Where:** `foodie-website/foodie.html`, `foodie-website/foodie-api.js`.
+- **Decisions / notes:** Groups RLS and refresh issues resolved; debug UI no longer needed.
+
+### 2025-02-12 — Groups RLS and visibility fixes (earlier)
+
+- **What:** Migrations 002–009: creator backfill, auto-member trigger, RLS recursion fixes. Groups now visible to creators and members.
+- **Where:** `foodie-website/supabase/migrations/002–009`.
+- **Decisions / notes:** Run all migrations in order for groups to work correctly.
+
+### 2025-02-12 — Pull-to-refresh, invite flow, people search
+
+- **What:** Pull-to-refresh on all tabs; Network reorganized (Invite via link vs Connect with someone on Foodie); LinkedIn-style people search with debounced input.
+- **Where:** `foodie-website/foodie.html`, `foodie-website/foodie-api.js`.
+- **Decisions / notes:** Search input had focus/typing issues; cache invalidation (v4) should help users get fixed version.
+
+### 2025-02-12 — QA pass: XSS and null-safety fixes
+
+- **What:** QA / Bug Hunter pass. Fixed XSS in title attributes (display names, likedBy, alsoBy, cuisines) — now escaped with escapeHtml. Added null-safety guards for state.user in toggleLike, addComment, sendConnectionRequest, acceptConnectionRequest, ignoreConnectionRequest, removeConnection, addReview.
+- **Where:** `foodie-website/foodie.html`.
+- **Decisions / notes:** User-generated content in title attributes and map popups now escaped. Guards prevent crashes when session expires or user is null.
+
+---
+
 ## How to use this file
 
 - **Before starting work:** Read the entries below so you know what's been done and what to take into account.

@@ -687,14 +687,14 @@
 
     async function toggleLike(id) {
       const r = state.reviews.find(x => x.id === id);
-      if (!r) return;
+      if (!r || !state.user) return;
       const add = !r.liked;
       if (!r.likedBy) r.likedBy = [];
       if (add) {
         r.liked = true;
         r.likes = (r.likes||0) + 1;
-        if (!r.likedBy.includes(state.user?.displayName)) r.likedBy.push(state.user?.displayName);
-        if (r.by !== state.user?.displayName) {
+        if (!r.likedBy.includes(state.user.displayName)) r.likedBy.push(state.user.displayName);
+        if (r.by !== state.user.displayName) {
           state.notifications.push({ id: Date.now().toString(), type: 'like', text: `${state.user.displayName} liked your review of ${r.restaurant}`, read: false, date: Date.now() });
         }
       } else {
@@ -721,7 +721,7 @@
     }
     async function addComment(reviewId, text) {
       const t = (text || '').trim().slice(0, MAX_COMMENT_TEXT);
-      if (!t) return;
+      if (!t || !state.user) return;
       if (!state.comments[reviewId]) state.comments[reviewId] = [];
       state.comments[reviewId].push({ id: Date.now().toString(), by: state.user.displayName, text: t, date: Date.now() });
       const r = state.reviews.find(x => x.id === reviewId);
@@ -961,7 +961,7 @@
       if (window.FOODIE_API?.enabled) await refreshFeed(); else render();
     }
     async function sendConnectionRequest(toName) {
-      if (!toName || !toName.trim()) return;
+      if (!toName || !toName.trim() || !state.user) return;
       const from = state.user.displayName;
       const to = toName.trim();
       if (from === to) return;
@@ -979,6 +979,7 @@
       render();
     }
     async function acceptConnectionRequest(reqId) {
+      if (!state.user) return;
       const req = (state.connectionRequests || []).find(r => r.id === reqId && r.to === state.user.displayName && r.status === 'pending');
       if (!req) return;
       req.status = 'accepted';
@@ -992,6 +993,7 @@
       render();
     }
     async function ignoreConnectionRequest(reqId) {
+      if (!state.user) return;
       const req = (state.connectionRequests || []).find(r => r.id === reqId && r.to === state.user.displayName);
       if (req) { req.status = 'ignored'; if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.ignoreConnectionRequest(reqId); } catch (e) { console.warn(e); } } else saveToStorage(); render(); }
     }
@@ -1003,6 +1005,7 @@
       render();
     }
     async function removeConnection(name) {
+      if (!state.user) return;
       const uid = state.user.displayName;
       if (state.connections[uid]) {
         state.connections[uid] = state.connections[uid].filter(c => c !== name);
@@ -1477,6 +1480,7 @@
     }
 
     async function addReview() {
+      if (!state.user) return;
       const text = ((document.querySelector('.add-review-textarea') || {}).value || state.reviewText || '').trim();
       if (!text || state.rating < 1) { alert('Please add a rating and write your review.'); return; }
       if (text.length > MAX_REVIEW_TEXT) { alert('Review is too long. Please keep it under ' + MAX_REVIEW_TEXT + ' characters.'); return; }
@@ -1636,8 +1640,8 @@
                 ${isOwn ? `<button class="review-edit-btn" onclick="editReviewById('${r.id}')" title="Edit">✏️ Edit</button><button class="review-edit-btn" onclick="deleteReviewById('${r.id}')" title="Delete" style="color:#c62828">🗑️ Delete</button>` : ''}
               </div>
               <div class="review-date">${formatDate(r.date)}</div>
-              <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${escapeHtml(r.restaurant)}" title="${(()=>{const a=getAlsoReviewedBy(r); return a.length ? 'Also reviewed by '+a.join(', ') : ''})()}">${escapeHtml((r.restaurant||'').substring(0,60))}${(r.restaurant||'').length>60?'...':''}</div>
-              ${(()=>{const alsoBy=getAlsoReviewedBy(r); if(alsoBy.length>0) return `<div style="padding:2px 0;font-size:0.8rem;color:#666;cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal('${r.id}')" title="${alsoBy.join(', ')}">Also reviewed by ${alsoBy.slice(0,3).join(', ')}${alsoBy.length>3?' and '+(alsoBy.length-3)+' more':''}</div>`; if(mutualCount>0) return `<div class="mutual-connections" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal('${r.id}')" title="${(state.reviews.filter(x=>Math.abs(x.lat-r.lat)<0.01&&Math.abs(x.lng-r.lng)<0.01&&x.by!==r.by&&(state.connections[state.user?.displayName]||[]).includes(x.by)).map(x=>x.by)).join(', ')}">${mutualCount} ${mutualCount===1?'friend':'friends'} also reviewed this</div>`; if(networkScore&&networkScore.count>0) return `<div class="network-score" style="font-size:0.8rem;color:#333;margin-top:4px;font-weight:500;${networkScore.count>1?'cursor:pointer;text-decoration:underline;text-underline-offset:2px':''}" ${networkScore.count>1?`onclick="showReviewersModal('${r.id}')" title="View reviewers"`:''}>Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</div>`; return ''})()}
+              <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${escapeHtml(r.restaurant)}" title="${(()=>{const a=getAlsoReviewedBy(r); return a.length ? 'Also reviewed by '+a.map(x=>escapeHtml(x)).join(', ') : ''})()}">${escapeHtml((r.restaurant||'').substring(0,60))}${(r.restaurant||'').length>60?'...':''}</div>
+              ${(()=>{const alsoBy=getAlsoReviewedBy(r); if(alsoBy.length>0) return `<div style="padding:2px 0;font-size:0.8rem;color:#666;cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal('${r.id}')" title="${alsoBy.map(x=>escapeHtml(x)).join(', ')}">Also reviewed by ${alsoBy.slice(0,3).map(x=>escapeHtml(x)).join(', ')}${alsoBy.length>3?' and '+(alsoBy.length-3)+' more':''}</div>`; if(mutualCount>0) return `<div class="mutual-connections" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal('${r.id}')" title="${(state.reviews.filter(x=>Math.abs(x.lat-r.lat)<0.01&&Math.abs(x.lng-r.lng)<0.01&&x.by!==r.by&&(state.connections[state.user?.displayName]||[]).includes(x.by)).map(x=>escapeHtml(x.by)).join(', ')}">${mutualCount} ${mutualCount===1?'friend':'friends'} also reviewed this</div>`; if(networkScore&&networkScore.count>0) return `<div class="network-score" style="font-size:0.8rem;color:#333;margin-top:4px;font-weight:500;${networkScore.count>1?'cursor:pointer;text-decoration:underline;text-underline-offset:2px':''}" ${networkScore.count>1?`onclick="showReviewersModal('${r.id}')" title="View reviewers"`:''}>Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</div>`; return ''})()}
               ${(r.cuisine||r.price) ? `<div style="font-size:0.75rem;color:#666;margin-top:2px">${escapeHtml(r.cuisine||'')} ${PRICE_LABELS[(r.price||2)-1]||''}</div>` : ''}
             </div>
           </div>
@@ -1647,7 +1651,7 @@
             <div class="review-rating">${'❤️'.repeat(r.rating)}</div>
           </div>
           <div class="review-actions">
-            <button class="review-action-btn ${r.liked?'liked':''}" onclick="toggleLike('${r.id}')" aria-label="Like" title="${((r.likedBy||[]).length) ? 'Liked by ' + (r.likedBy||[]).slice(0,3).join(', ') + ((r.likedBy||[]).length>3 ? ' and ' + ((r.likedBy||[]).length-3) + ' more' : '') : 'Like'}">${r.liked?'❤️':'🤍'} Like</button>
+            <button class="review-action-btn ${r.liked?'liked':''}" onclick="toggleLike('${r.id}')" aria-label="Like" title="${((r.likedBy||[]).length) ? 'Liked by ' + (r.likedBy||[]).slice(0,3).map(x=>escapeHtml(x)).join(', ') + ((r.likedBy||[]).length>3 ? ' and ' + ((r.likedBy||[]).length-3) + ' more' : '') : 'Like'}">${r.liked?'❤️':'🤍'} Like</button>
             <button class="review-action-btn" onclick="document.getElementById('commentInput${r.id}')?.focus()" aria-label="Comment">💬 Comment ${comments.length?`(${comments.length})`:''}</button>
             <button class="review-action-btn" onclick="shareReview('${r.id}')" aria-label="Share">↗️ Share</button>
             <button class="review-action-btn" onclick="showRestaurantOnMap('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" aria-label="View on map">📍 Map</button>
@@ -1678,7 +1682,7 @@
               <button onclick="var i=document.getElementById('commentInput${r.id}'); addComment('${r.id}',i.value); i.value=''">Post</button>
             </div>
           </div>` : ''}
-          ${(r.likes||0) > 0 ? `<div style="padding: 0 16px 4px 76px; font-size: 0.8rem; color: #666; cursor: pointer; text-decoration: underline; text-underline-offset: 2px" onclick="showLikersModal('${r.id}')" title="${(r.likedBy||[]).join(', ')}">${r.likes} ${r.likes===1?'like':'likes'}</div>` : ''}
+          ${(r.likes||0) > 0 ? `<div style="padding: 0 16px 4px 76px; font-size: 0.8rem; color: #666; cursor: pointer; text-decoration: underline; text-underline-offset: 2px" onclick="showLikersModal('${r.id}')" title="${(r.likedBy||[]).map(x=>escapeHtml(x)).join(', ')}">${r.likes} ${r.likes===1?'like':'likes'}</div>` : ''}
         </div>
       `;
     }
@@ -2003,7 +2007,7 @@
             <h1 style="font-size:1.5rem;margin-bottom:8px">${escapeHtml(vr.name)}</h1>
             <div style="display:flex;gap:16px;flex-wrap:wrap;color:#666;font-size:0.95rem">
               ${networkScore ? `<span style="font-weight:500;color:#333">Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</span>` : ''}
-              ${cuisines.length ? `<span>${cuisines.join(', ')}</span>` : ''}
+              ${cuisines.length ? `<span>${cuisines.map(c=>escapeHtml(c)).join(', ')}</span>` : ''}
             </div>
             <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;align-items:center">
               <a href="https://www.google.com/maps?q=${vr.lat},${vr.lng}" target="_blank" rel="noopener" style="color:#0a66c2;font-size:0.9rem">📍 Get directions</a>
@@ -2426,7 +2430,7 @@
         const color = levelColors[r.level] ?? levelColors[2];
         const levelLabel = r.level === 0 ? 'Discover' : r.level === 1 ? '1st level' : r.level === 2 ? '2nd level' : 'Your review';
         const firstPhoto = (r.reviews || []).flatMap(rev => getReviewPhotoUrls(rev)).find(Boolean);
-        const cuisineStr = (r.cuisines && r.cuisines.length) ? r.cuisines.join(', ') : 'Various';
+        const cuisineStr = (r.cuisines && r.cuisines.length) ? r.cuisines.map(c=>escapeHtml(c)).join(', ') : 'Various';
         const priceStr = PRICE_LABELS[(r.price||2)-1] || '$$';
         const dirUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + r.lat + ',' + r.lng;
         return '<div class="map-popup" style="min-width:180px;max-width:260px">' +
