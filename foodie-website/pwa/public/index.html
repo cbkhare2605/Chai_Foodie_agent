@@ -1130,7 +1130,6 @@
       if ((state.networkSearch || '').trim().length < 2) { state.networkSearchResults = []; state.networkSearchLoading = false; render(); return; }
       state.networkSearchLoading = true;
       networkSearchTimer = setTimeout(runNetworkSearch, 350);
-      render();
     }
 
     function isSafePhotoUrl(url) {
