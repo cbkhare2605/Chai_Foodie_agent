@@ -367,7 +367,8 @@
       mapFocusRestaurant: null,
       pendingConnect: null,
       authMode: 'signup',
-      viewLikersReviewId: null
+      viewLikersReviewId: null,
+      viewReviewersReviewId: null
     };
     async function bootstrapApp() {
       const hashParams = new URLSearchParams((location.hash || '').replace(/^#/, ''));
@@ -616,6 +617,11 @@
     }
 
     function getSavedKey(r) { return (r.lat + ',' + r.lng + '|' + (r.restaurant||'')).slice(0,80); }
+    function getAlsoReviewedBy(r) {
+      const key = getSavedKey(r);
+      if (!key) return [];
+      return [...new Set(state.reviews.filter(x => getSavedKey(x) === key && x.by !== r.by).map(x => x.by))];
+    }
     function isSaved(r) { return state.saved.includes(getSavedKey(r)); }
     function getPrivateNote(reviewId) { return (state.privateNotes || {})[reviewId] || ''; }
     async function setPrivateNote(reviewId, text) { if (!state.privateNotes) state.privateNotes = {}; state.privateNotes[reviewId] = (text || '').trim(); if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.setPrivateNote(reviewId, (text || '').trim()); } catch (e) { console.warn(e); } } else saveToStorage(); render(); }
@@ -1306,8 +1312,9 @@
                 ${isOwn ? `<button class="review-edit-btn" onclick="editReviewById('${r.id}')" title="Edit">✏️ Edit</button><button class="review-edit-btn" onclick="deleteReviewById('${r.id}')" title="Delete" style="color:#c62828">🗑️ Delete</button>` : ''}
               </div>
               <div class="review-date">${formatDate(r.date)}</div>
-              <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${escapeHtml(r.restaurant)}">${escapeHtml((r.restaurant||'').substring(0,60))}${(r.restaurant||'').length>60?'...':''}</div>
+              <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${escapeHtml(r.restaurant)}" title="${(()=>{const a=getAlsoReviewedBy(r); return a.length ? 'Also reviewed by '+a.join(', ') : ''})()}">${escapeHtml((r.restaurant||'').substring(0,60))}${(r.restaurant||'').length>60?'...':''}</div>
               ${mutualCount > 0 ? `<div class="mutual-connections">${mutualCount} ${mutualCount===1?'friend':'friends'} also reviewed this</div>` : ''}
+              ${(()=>{const alsoBy=getAlsoReviewedBy(r); return alsoBy.length>0 ? `<div style="padding:2px 0;font-size:0.8rem;color:#666;cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal('${r.id}')" title="${alsoBy.join(', ')}">Also reviewed by ${alsoBy.slice(0,3).join(', ')}${alsoBy.length>3?' and '+(alsoBy.length-3)+' more':''}</div>` : ''})()}
               ${networkScore && networkScore.count > 0 ? `<div class="network-score" style="font-size:0.8rem;color:#333;margin-top:4px;font-weight:500">Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</div>` : ''}
               ${(r.cuisine||r.price) ? `<div style="font-size:0.75rem;color:#666;margin-top:2px">${escapeHtml(r.cuisine||'')} ${PRICE_LABELS[(r.price||2)-1]||''}</div>` : ''}
             </div>
@@ -1356,6 +1363,14 @@
     function openMenu() { state.menuOpen = true; render(); }
     function closeMenu() { state.menuOpen = false; render(); }
     function closeLikersModal() { state.viewLikersReviewId = null; render(); }
+    function showReviewersModal(reviewId) {
+      const r = state.reviews.find(x => x.id === reviewId);
+      const reviewers = getAlsoReviewedBy(r);
+      if (!r || !reviewers.length) return;
+      state.viewReviewersReviewId = reviewId;
+      render();
+    }
+    function closeReviewersModal() { state.viewReviewersReviewId = null; render(); }
 
     function updateFeedCards() {
       const el = document.getElementById('feedCards');
@@ -1805,6 +1820,16 @@
           <button onclick="closeLikersModal()" style="margin-top:16px;padding:10px 20px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;width:100%">Close</button>
         </div>`;
       })() : '';
+      const reviewersModalHtml = state.viewReviewersReviewId ? (() => {
+        const r = state.reviews.find(x => x.id === state.viewReviewersReviewId);
+        const reviewers = getAlsoReviewedBy(r);
+        return `<div class="menu-overlay" onclick="closeReviewersModal()" style="z-index:150"></div>
+        <div style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:white;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:320px;width:90%;max-height:70vh;overflow:auto;z-index:151;padding:20px">
+          <h3 style="margin:0 0 16px 0;font-size:1.1rem">Also reviewed ${escapeHtml(r?.restaurant||'this place')}</h3>
+          <div style="display:flex;flex-direction:column;gap:8px">${reviewers.map(n=>{const av=getSafeAvatarUrl(state.profiles[n]);return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f9f9f9;border-radius:8px"><span class="review-avatar" style="width:36px;height:36px;font-size:0.9rem${av?';background-image:url('+av+');background-size:cover;background-position:center' : ''}">${av?'':getInitials(n)}</span><span style="font-weight:500">${escapeHtml(n)}</span></div>`}).join('')}</div>
+          <button onclick="closeReviewersModal()" style="margin-top:16px;padding:10px 20px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;width:100%">Close</button>
+        </div>`;
+      })() : '';
       app.innerHTML = `
         <div class="top-bar">
           <div class="header">
@@ -1820,6 +1845,7 @@
         </div>
         ${sidebarHtml}
         ${likersModalHtml}
+        ${reviewersModalHtml}
         <main id="main" class="app-content" role="main">
           <div class="app-content-inner">${mainContent}</div>
           <aside class="ad-strip" aria-label="Advertisement">
