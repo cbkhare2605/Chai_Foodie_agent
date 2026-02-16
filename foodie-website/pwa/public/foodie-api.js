@@ -213,6 +213,15 @@
     await supabase.from('reviews').delete().eq('id', id);
   }
 
+  async function fixReviewLocation(reviewId, lat, lng) {
+    const { error } = await supabase.rpc('fix_review_location', {
+      p_review_id: reviewId,
+      p_lat: lat,
+      p_lng: lng
+    });
+    if (error) throw error;
+  }
+
   async function toggleLike(reviewId, add) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not signed in');
@@ -351,6 +360,7 @@
     getUserIdByDisplayName,
     saveReview,
     deleteReview,
+    fixReviewLocation,
     toggleLike: toggleLike,
     addComment,
     sendConnectionRequest,

@@ -813,7 +813,14 @@
       const toUpdate = state.reviews.filter(r => Math.abs(r.lat - oldLat) < 0.01 && Math.abs(r.lng - oldLng) < 0.01);
       for (const r of toUpdate) {
         r.lat = pinLat; r.lng = pinLng;
-        if (window.FOODIE_API?.enabled) try { await window.FOODIE_API.saveReview(r); } catch (e) { console.warn(e); }
+        if (window.FOODIE_API?.enabled) {
+          try {
+            await window.FOODIE_API.fixReviewLocation(r.id, pinLat, pinLng);
+          } catch (e) {
+            console.warn(e);
+            try { await window.FOODIE_API.saveReview(r); } catch (e2) { console.warn(e2); }
+          }
+        }
       }
       if (!window.FOODIE_API?.enabled) saveToStorage();
       if (state.viewRestaurant && Math.abs(state.viewRestaurant.lat - oldLat) < 0.01 && Math.abs(state.viewRestaurant.lng - oldLng) < 0.01) state.viewRestaurant = { ...state.viewRestaurant, lat: pinLat, lng: pinLng };
