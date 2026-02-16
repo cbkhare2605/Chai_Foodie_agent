@@ -434,13 +434,14 @@
     let searchTimer = null;
     async function nominatimSearch(query, viewbox) {
       let url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=10';
-      if (viewbox) url += '&viewbox=' + viewbox + '&bounded=0';
+      if (viewbox) url += '&viewbox=' + viewbox + '&bounded=1';
       const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'FoodieApp/1.0 (https://github.com/foodie-app; contact@foodie.app)' } });
       return res.json();
     }
-    async function photonSearch(query, lat, lon) {
+    async function photonSearch(query, lat, lon, bbox) {
       let url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(query) + '&limit=10';
       if (lat != null && lon != null) url += '&lat=' + lat + '&lon=' + lon;
+      if (bbox && bbox.minLon != null && bbox.minLat != null && bbox.maxLon != null && bbox.maxLat != null) url += '&bbox=' + bbox.minLon + ',' + bbox.minLat + ',' + bbox.maxLon + ',' + bbox.maxLat;
       const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
       const data = await res.json();
       if (!data?.features?.length) return [];
@@ -498,19 +499,34 @@
     async function geocodePlace(query, biasLat, biasLon) {
       try {
         let loc = (biasLat != null && biasLon != null) ? { lat: biasLat, lng: biasLon } : (state.userLocation || null);
-        const isDefaultBias = loc && Math.abs(loc.lat - 37.37) < 0.01 && Math.abs(loc.lng - (-122.03)) < 0.01;
-        if (isDefaultBias && queryLooksLikeDifferentLocation(query)) {
+        let bbox = null;
+        if (queryLooksLikeDifferentLocation(query)) {
           const parts = (query || '').split(',').map(p => p.trim()).filter(Boolean);
           const cityState = parts.length >= 2 ? parts.slice(-2).join(', ') : '';
           if (cityState.length >= 4) {
             const region = await photonSearch(cityState, null, null);
-            if (region.length > 0) loc = { lat: region[0].lat, lng: region[0].lng };
+            if (region.length > 0) {
+              const cityCenter = { lat: region[0].lat, lng: region[0].lng };
+              const delta = 0.08;
+              bbox = { minLon: cityCenter.lng - delta, minLat: cityCenter.lat - delta, maxLon: cityCenter.lng + delta, maxLat: cityCenter.lat + delta };
+              loc = cityCenter;
+            }
           }
         }
-        const results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null);
+        let results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null, bbox);
         if (results.length > 0) return { lat: results[0].lat, lng: results[0].lng };
-        const data = await nominatimSearch(query);
+        if (bbox) {
+          results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null, null);
+          if (results.length > 0) {
+            const cityLat = loc?.lat, cityLng = loc?.lng;
+            const inRange = results.find(r => cityLat != null && Math.abs(r.lat - cityLat) < 0.15 && Math.abs(r.lng - cityLng) < 0.15);
+            if (inRange) return { lat: inRange.lat, lng: inRange.lng };
+          }
+        }
+        const viewbox = bbox ? bbox.minLon + ',' + bbox.minLat + ',' + bbox.maxLon + ',' + bbox.maxLat : null;
+        const data = await nominatimSearch(query, viewbox);
         if (data?.length) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        if (loc) return { lat: loc.lat, lng: loc.lng };
       } catch (e) {}
       return null;
     }
@@ -1173,12 +1189,13 @@
       if (state.editingReview) {
         const idx = state.reviews.findIndex(r => r.id === state.editingReview.id);
         if (idx >= 0) {
+          const searchName = (state.restaurantSearch || state.editingReview.restaurant || '').trim();
           let place = state.selectedPlace || { name: state.editingReview.restaurant, lat: state.editingReview.lat, lng: state.editingReview.lng };
-          if (state.restaurantSearch.trim() && state.restaurantSearch.trim() !== state.editingReview.restaurant) {
+          if (searchName) {
             const loc = state.userLocation || { lat: state.editingReview.lat, lng: state.editingReview.lng };
-            const geocoded = await geocodePlace(state.restaurantSearch.trim(), loc.lat, loc.lng);
-            if (geocoded) place = { name: state.restaurantSearch.trim(), lat: geocoded.lat, lng: geocoded.lng };
-            else if (!state.selectedPlace) place = { name: state.restaurantSearch.trim(), lat: state.editingReview.lat, lng: state.editingReview.lng };
+            const geocoded = await geocodePlace(searchName, loc.lat, loc.lng);
+            if (geocoded) place = { name: (state.restaurantSearch || state.editingReview.restaurant || '').trim().slice(0, MAX_RESTAURANT_NAME), lat: geocoded.lat, lng: geocoded.lng };
+            else if (!state.selectedPlace && state.restaurantSearch?.trim() !== state.editingReview.restaurant) place = { name: searchName.slice(0, MAX_RESTAURANT_NAME), lat: state.editingReview.lat, lng: state.editingReview.lng };
           }
           const updated = { ...state.reviews[idx], text: text.trim(), rating: state.rating, restaurant: place.name, lat: place.lat, lng: place.lng, cuisine: state.addCuisine || 'Various', price: state.addPrice || 2, photos: (state.addPhotos || []).filter(isSafePhotoUrl), verifiedVisit: state.addVerifiedVisit, wouldGoAgain: state.addWouldGoAgain };
           state.reviews[idx] = updated;
