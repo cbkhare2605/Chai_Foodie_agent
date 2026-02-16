@@ -367,6 +367,11 @@
       savedListFilter: 'Saved',
       mapFocusRestaurant: null,
       pendingConnect: null,
+      groups: [],
+      selectedGroupId: null,
+      groupsPanel: 'list',
+      createGroupName: '',
+      createGroupMembers: [],
       authMode: 'signup',
       viewLikersReviewId: null,
       viewReviewersReviewId: null,
@@ -402,6 +407,7 @@
       state.privateNotes = stored.privateNotes || {};
       state.groupLists = stored.groupLists || {};
       state.trustScores = stored.trustScores || {};
+      state.groups = stored.groups || [];
       render();
       handleDeepLink();
       setupAutoRefresh();
@@ -421,6 +427,7 @@
         state.privateNotes = stored.privateNotes || {};
         state.groupLists = stored.groupLists || {};
         state.trustScores = stored.trustScores || {};
+        state.groups = stored.groups || [];
         render();
       } catch (e) { console.warn('Refresh failed', e); }
     }
@@ -883,6 +890,55 @@
         if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.removeConnection(name); } catch (e) { console.warn(e); } } else saveToStorage();
         render();
       }
+    }
+    async function createGroup() {
+      const name = (document.getElementById('createGroupNameInput')?.value || state.createGroupName || '').trim();
+      if (!name) { alert('Enter a group name'); return; }
+      const api = window.FOODIE_API;
+      if (!api?.enabled) return;
+      try {
+        const id = await api.createGroup(name);
+        for (const m of (state.createGroupMembers || [])) {
+          try { await api.addGroupMemberByName(id, m); } catch (e) { console.warn('Could not add', m, e); }
+        }
+        await refreshFeed();
+        state.groupsPanel = 'detail'; state.selectedGroupId = id; state.createGroupName = ''; state.createGroupMembers = [];
+        render();
+      } catch (e) { alert(e.message || 'Could not create group'); }
+    }
+    async function addMemberToGroup(groupId, displayName) {
+      try {
+        await window.FOODIE_API.addGroupMemberByName(groupId, displayName);
+        await refreshFeed();
+        render();
+      } catch (e) { alert(e.message || 'Could not add member'); }
+    }
+    async function removeMemberFromGroup(groupId, displayName) {
+      if (!confirm('Remove ' + displayName + ' from this group?')) return;
+      try {
+        const userId = await window.FOODIE_API.getUserIdByDisplayName(displayName);
+        if (userId) await window.FOODIE_API.removeGroupMember(groupId, userId);
+        await refreshFeed();
+        render();
+      } catch (e) { alert(e.message || 'Could not remove member'); }
+    }
+    async function deleteGroupConfirm(groupId) {
+      if (!confirm('Delete this group? This cannot be undone.')) return;
+      try {
+        await window.FOODIE_API.deleteGroup(groupId);
+        await refreshFeed();
+        state.groupsPanel = 'list'; state.selectedGroupId = null;
+        render();
+      } catch (e) { alert(e.message || 'Could not delete group'); }
+    }
+    async function leaveGroupConfirm(groupId) {
+      if (!confirm('Leave this group?')) return;
+      try {
+        await window.FOODIE_API.leaveGroup(groupId);
+        await refreshFeed();
+        state.groupsPanel = 'list'; state.selectedGroupId = null;
+        render();
+      } catch (e) { alert(e.message || 'Could not leave group'); }
     }
     function getPeopleYouCanAdd() {
       const me = state.user?.displayName;
@@ -1787,6 +1843,53 @@
           <h3 style="margin-bottom:12px">Reviews</h3>
           ${restReviews.length ? restReviews.map(r=>renderReviewCard(r)).join('') : '<p style="color:#666">No reviews yet.</p>'}
         </div>`;
+      } else if (state.panel === 'groups' && window.FOODIE_API?.enabled) {
+        const groups = state.groups || [];
+        if (state.groupsPanel === 'create') {
+          const conns = state.connections[state.user?.displayName] || [];
+          const addable = conns.filter(c => !state.createGroupMembers.includes(c));
+          mainContent = `<div class="main">
+          <div style="margin-bottom:12px"><button onclick="state.groupsPanel='list'; state.createGroupName=''; state.createGroupMembers=[]; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
+          <h2 style="margin-bottom:20px">Create group</h2>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:16px">Private, invite-only groups. Only members can see the group and its feed.</p>
+          <div style="margin-bottom:16px">
+            <label style="font-size:0.9rem;color:#666;display:block;margin-bottom:6px">Group name</label>
+            <input type="text" id="createGroupNameInput" placeholder="e.g. Foodie Squad" value="${(state.createGroupName||'').replace(/"/g,'&quot;')}" oninput="state.createGroupName=this.value; render()" style="width:100%;padding:12px 16px;border:1px solid #ddd;border-radius:8px;font-size:1rem">
+          </div>
+          <h3 style="margin-bottom:12px;font-size:1rem">Add members (from your connections)</h3>
+          <div style="margin-bottom:16px;display:flex;flex-wrap:wrap;gap:8px">${(state.createGroupMembers||[]).map(n=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;background:#e31919;color:white;border-radius:8px;font-size:0.9rem">${escapeHtml(n)} <button onclick="state.createGroupMembers=state.createGroupMembers.filter(x=>x!=='${(n||'').replace(/'/g,"\\'")}'); render()" style="background:none;border:none;color:white;cursor:pointer;font-size:1.1rem;line-height:1">×</button></span>`).join('')}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px">${addable.length ? addable.map(c=>`<button onclick="state.createGroupMembers=[...(state.createGroupMembers||[]),'${(c||'').replace(/'/g,"\\'")}']; render()" style="padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem">+ ${escapeHtml(c)}</button>`).join('') : '<p style="color:#666;font-size:0.9rem">No connections to add. Connect with people first in Network.</p>'}</div>
+          <button onclick="createGroup()" style="padding:14px 24px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:1rem">Create group</button>
+        </div>`;
+        } else if (state.groupsPanel === 'detail' && state.selectedGroupId) {
+          const g = groups.find(x => x.id === state.selectedGroupId);
+          if (g) {
+            const groupReviews = state.reviews.filter(r => g.memberNames.includes(r.by));
+            const isCreator = g.createdBy === state.user?.displayName;
+            const conns = state.connections[state.user?.displayName] || [];
+            const addable = conns.filter(c => !g.memberNames.includes(c));
+            mainContent = `<div class="main">
+          <div style="margin-bottom:12px"><button onclick="state.groupsPanel='list'; state.selectedGroupId=null; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
+          <h2 style="margin-bottom:8px">${escapeHtml(g.name)}</h2>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:16px">Created by ${escapeHtml(g.createdBy)} · ${g.memberNames.length} member${g.memberNames.length!==1?'s':''}</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">${g.memberNames.map(n=>`<span style="display:inline-flex;align-items:center;gap:6px;padding:8px 12px;background:#f3f2ef;border-radius:8px;font-size:0.9rem">${escapeHtml(n)}${isCreator && n!==state.user?.displayName ? `<button onclick="removeMemberFromGroup('${g.id}','${(n||'').replace(/'/g,"\\'")}'); render()" style="background:none;border:none;color:#666;cursor:pointer;font-size:1rem;line-height:1">×</button>` : ''}</span>`).join('')}</div>
+          ${isCreator && addable.length ? `<div style="margin-bottom:16px"><label style="font-size:0.9rem;color:#666;display:block;margin-bottom:6px">Add member</label><div style="display:flex;flex-wrap:wrap;gap:8px">${addable.map(c=>`<button onclick="addMemberToGroup('${g.id}','${(c||'').replace(/'/g,"\\'")}'); render()" style="padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem">+ ${escapeHtml(c)}</button>`).join('')}</div></div>` : ''}
+          ${isCreator ? `<button onclick="deleteGroupConfirm('${g.id}')" style="padding:8px 16px;background:#c62828;color:white;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;margin-bottom:16px">Delete group</button>` : `<button onclick="leaveGroupConfirm('${g.id}')" style="padding:8px 16px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;margin-bottom:16px">Leave group</button>`}
+          <h3 style="margin-bottom:12px">Group feed (${groupReviews.length})</h3>
+          ${groupReviews.length ? groupReviews.map(r=>renderReviewCard(r)).join('') : '<p style="color:#666">No reviews from group members yet.</p>'}
+        </div>`;
+          } else {
+            mainContent = `<div class="main"><div style="margin-bottom:12px"><button onclick="state.groupsPanel='list'; state.selectedGroupId=null; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div><p style="color:#666">Group not found.</p></div>`;
+          }
+        } else {
+          mainContent = `<div class="main">
+          <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
+          <h2 style="margin-bottom:20px">Groups</h2>
+          <p style="font-size:0.9rem;color:#666;margin-bottom:16px">Private, invite-only groups. Create a group and add connections to share a smaller feed and map.</p>
+          <button onclick="state.groupsPanel='create'; state.createGroupName=''; state.createGroupMembers=[]; render()" style="width:100%;padding:14px 20px;margin-bottom:24px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:500">+ Create group</button>
+          ${groups.length ? groups.map(g=>`<div onclick="state.selectedGroupId='${g.id}'; state.groupsPanel='detail'; render()" style="padding:16px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);cursor:pointer"><div style="font-weight:600">${escapeHtml(g.name)}</div><div style="font-size:0.85rem;color:#666;margin-top:4px">${g.memberNames.length} member${g.memberNames.length!==1?'s':''} · by ${escapeHtml(g.createdBy)}</div></div>`).join('') : '<p style="color:#666">No groups yet. Create one to get started.</p>'}
+        </div>`;
+        }
       } else if (state.panel === 'feedback') {
         mainContent = `<div class="main"><div style="padding:16px;background:white;border-radius:8px;max-width:400px;margin:0 auto">
           <h2 style="margin-bottom:16px">Feedback</h2>
@@ -1925,6 +2028,7 @@
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='myreviews'; render()">My Reviews</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='saved'; render()">Saved (${state.saved.length})</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='network'; render()">Network ${getPendingRequestsForMe().length ? `(${getPendingRequestsForMe().length})` : ''}</button>
+            ${window.FOODIE_API?.enabled ? `<button class="menu-sidebar-item" onclick="closeMenu(); state.panel='groups'; state.groupsPanel='list'; state.selectedGroupId=null; render()">Groups (${(state.groups||[]).length})</button>` : ''}
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='notifications'; render()">Notifications ${state.notifications.filter(n=>(!n.recipient||n.recipient===state.user?.displayName)&&!n.read).length ? `(${state.notifications.filter(n=>(!n.recipient||n.recipient===state.user?.displayName)&&!n.read).length})` : ''}</button>
             <button class="menu-sidebar-item" onclick="shareApp()">📤 Share app</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='feedback'; render()">Feedback</button>
@@ -2035,7 +2139,7 @@
           stored.user = { id: signUpData.user.id, displayName: prof?.display_name || signUpData.user.email?.split('@')[0] || 'User' };
         }
         if (stored.user) {
-          state.user = stored.user; state.reviews = stored.reviews || []; state.comments = stored.comments || {}; state.connections = stored.connections || {}; state.connectionRequests = stored.connectionRequests || []; state.saved = stored.saved || []; state.notifications = stored.notifications || []; state.profiles = stored.profiles || {}; state.privateNotes = stored.privateNotes || {}; state.groupLists = stored.groupLists || {}; state.trustScores = stored.trustScores || {};
+          state.user = stored.user; state.reviews = stored.reviews || []; state.comments = stored.comments || {}; state.connections = stored.connections || {}; state.connectionRequests = stored.connectionRequests || []; state.saved = stored.saved || []; state.notifications = stored.notifications || []; state.profiles = stored.profiles || {}; state.privateNotes = stored.privateNotes || {}; state.groupLists = stored.groupLists || {}; state.trustScores = stored.trustScores || {}; state.groups = stored.groups || [];
           state.tab = 'feed'; state.panel = 'main';
           if (state.pendingConnect && state.pendingConnect !== state.user.displayName) { state.tab = 'network'; state.panel = 'network'; state.addConnectionInput = state.pendingConnect; state.pendingConnect = null; }
           render();
@@ -2071,7 +2175,7 @@
         if (history.replaceState) history.replaceState({}, '', location.pathname);
         const stored = await api.loadData();
         if (stored.user) {
-          state.user = stored.user; state.reviews = stored.reviews || []; state.comments = stored.comments || {}; state.connections = stored.connections || {}; state.connectionRequests = stored.connectionRequests || []; state.saved = stored.saved || []; state.notifications = stored.notifications || []; state.profiles = stored.profiles || {}; state.privateNotes = stored.privateNotes || {}; state.groupLists = stored.groupLists || {}; state.trustScores = stored.trustScores || {};
+          state.user = stored.user; state.reviews = stored.reviews || []; state.comments = stored.comments || {}; state.connections = stored.connections || {}; state.connectionRequests = stored.connectionRequests || []; state.saved = stored.saved || []; state.notifications = stored.notifications || []; state.profiles = stored.profiles || {}; state.privateNotes = stored.privateNotes || {}; state.groupLists = stored.groupLists || {}; state.trustScores = stored.trustScores || {}; state.groups = stored.groups || [];
           state.tab = 'feed'; state.panel = 'main';
           if (state.pendingConnect && state.pendingConnect !== state.user.displayName) { state.tab = 'network'; state.panel = 'network'; state.addConnectionInput = state.pendingConnect; state.pendingConnect = null; }
         }
@@ -2095,7 +2199,7 @@
           stored.reviews = stored.reviews || []; stored.comments = stored.comments || {}; stored.connections = stored.connections || {}; stored.connectionRequests = stored.connectionRequests || []; stored.saved = stored.saved || []; stored.notifications = stored.notifications || []; stored.profiles = stored.profiles || {}; stored.privateNotes = stored.privateNotes || {}; stored.groupLists = stored.groupLists || {}; stored.trustScores = stored.trustScores || {};
         }
         if (stored.user) {
-          state.user = stored.user; state.reviews = stored.reviews || []; state.comments = stored.comments || {}; state.connections = stored.connections || {}; state.connectionRequests = stored.connectionRequests || []; state.saved = stored.saved || []; state.notifications = stored.notifications || []; state.profiles = stored.profiles || {}; state.privateNotes = stored.privateNotes || {}; state.groupLists = stored.groupLists || {}; state.trustScores = stored.trustScores || {};
+          state.user = stored.user; state.reviews = stored.reviews || []; state.comments = stored.comments || {}; state.connections = stored.connections || {}; state.connectionRequests = stored.connectionRequests || []; state.saved = stored.saved || []; state.notifications = stored.notifications || []; state.profiles = stored.profiles || {}; state.privateNotes = stored.privateNotes || {}; state.groupLists = stored.groupLists || {}; state.trustScores = stored.trustScores || {}; state.groups = stored.groups || [];
           state.tab = 'feed'; state.panel = 'main';
           if (state.pendingConnect && state.pendingConnect !== state.user.displayName) { state.tab = 'network'; state.panel = 'network'; state.addConnectionInput = state.pendingConnect; state.pendingConnect = null; }
           render();

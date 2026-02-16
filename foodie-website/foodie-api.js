@@ -32,13 +32,13 @@
       user = u;
     }
     if (!user) {
-      return { user: null, reviews: [], comments: {}, connections: {}, connectionRequests: [], saved: [], notifications: [], profiles: {}, privateNotes: {}, groupLists: {}, trustScores: {} };
+      return { user: null, reviews: [], comments: {}, connections: {}, connectionRequests: [], saved: [], notifications: [], profiles: {}, privateNotes: {}, groupLists: {}, trustScores: {}, groups: [] };
     }
 
     const myProfile = await getProfileByUserId(user.id);
     const displayName = myProfile?.display_name || user.email?.split('@')[0] || 'User';
 
-    const [reviewsRes, commentsRes, connRes, reqRes, savedRes, notesRes, notifRes, listRes, profilesRes, likesRes] = await Promise.all([
+    const [reviewsRes, commentsRes, connRes, reqRes, savedRes, notesRes, notifRes, listRes, profilesRes, likesRes, groupsRes, groupMembersRes] = await Promise.all([
       supabase.from('reviews').select('*').order('created_at', { ascending: false }),
       supabase.from('comments').select('*'),
       supabase.from('connections').select('user_a, user_b'),
@@ -48,7 +48,9 @@
       supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
       supabase.from('group_list_items').select('list_name, saved_key').eq('user_id', user.id),
       supabase.from('profiles').select('id, display_name, bio, avatar_url'),
-      supabase.from('review_likes').select('review_id, user_id')
+      supabase.from('review_likes').select('review_id, user_id'),
+      supabase.from('groups').select('id, name, created_by, created_at'),
+      supabase.from('group_members').select('group_id, user_id')
     ]);
 
     const profileById = {};
@@ -138,6 +140,25 @@
       profiles[p.display_name] = { bio: p.bio, avatar: p.avatar_url };
     });
 
+    const groups = [];
+    const membersByGroup = {};
+    (groupMembersRes.data || []).forEach(gm => {
+      if (!membersByGroup[gm.group_id]) membersByGroup[gm.group_id] = [];
+      const name = profileById[gm.user_id]?.display_name;
+      if (name) membersByGroup[gm.group_id].push(name);
+    });
+    (groupsRes.data || []).forEach(g => {
+      const memberNames = membersByGroup[g.id] || [];
+      if (memberNames.includes(displayName)) {
+        groups.push({
+          id: g.id,
+          name: g.name,
+          createdBy: profileById[g.created_by]?.display_name || 'Unknown',
+          memberNames
+        });
+      }
+    });
+
     return {
       user: { id: user.id, displayName },
       reviews,
@@ -149,8 +170,46 @@
       profiles,
       privateNotes,
       groupLists,
-      trustScores: {}
+      trustScores: {},
+      groups
     };
+  }
+
+  async function createGroup(name) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not logged in');
+    const id = 'g_' + crypto.randomUUID().replace(/-/g, '');
+    const { error } = await supabase.from('groups').insert({ id, name, created_by: user.id });
+    if (error) throw error;
+    await supabase.from('group_members').insert({ group_id: id, user_id: user.id });
+    return id;
+  }
+
+  async function addGroupMember(groupId, userId) {
+    const { error } = await supabase.from('group_members').insert({ group_id: groupId, user_id: userId });
+    if (error) throw error;
+  }
+
+  async function addGroupMemberByName(groupId, displayName) {
+    const userId = await getUserIdByDisplayName(displayName);
+    if (!userId) throw new Error('User not found');
+    await addGroupMember(groupId, userId);
+  }
+
+  async function removeGroupMember(groupId, userId) {
+    const { error } = await supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId);
+    if (error) throw error;
+  }
+
+  async function leaveGroup(groupId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not logged in');
+    await removeGroupMember(groupId, user.id);
+  }
+
+  async function deleteGroup(groupId) {
+    const { error } = await supabase.from('groups').delete().eq('id', groupId);
+    if (error) throw error;
   }
 
   async function signUp(email, password, displayName) {
@@ -367,6 +426,12 @@
     toggleList,
     updateProfile,
     resetPasswordForEmail,
-    updateUserPassword
+    updateUserPassword,
+    createGroup,
+    addGroupMember,
+    addGroupMemberByName,
+    removeGroupMember,
+    leaveGroup,
+    deleteGroup
   };
 })();
