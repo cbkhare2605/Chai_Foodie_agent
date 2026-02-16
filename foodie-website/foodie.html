@@ -495,9 +495,19 @@
       }, 400);
     }
 
-    async function geocodePlace(query) {
+    async function geocodePlace(query, biasLat, biasLon) {
       try {
-        const results = await photonSearch(query, null, null);
+        let loc = (biasLat != null && biasLon != null) ? { lat: biasLat, lng: biasLon } : (state.userLocation || null);
+        const isDefaultBias = loc && Math.abs(loc.lat - 37.37) < 0.01 && Math.abs(loc.lng - (-122.03)) < 0.01;
+        if (isDefaultBias && queryLooksLikeDifferentLocation(query)) {
+          const parts = (query || '').split(',').map(p => p.trim()).filter(Boolean);
+          const cityState = parts.length >= 2 ? parts.slice(-2).join(', ') : '';
+          if (cityState.length >= 4) {
+            const region = await photonSearch(cityState, null, null);
+            if (region.length > 0) loc = { lat: region[0].lat, lng: region[0].lng };
+          }
+        }
+        const results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null);
         if (results.length > 0) return { lat: results[0].lat, lng: results[0].lng };
         const data = await nominatimSearch(query);
         if (data?.length) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
@@ -529,11 +539,13 @@
     function selectPlaceByIndex(i) {
       if (state.searchResults[i]) selectPlace(state.searchResults[i]);
     }
-    function useTypedNameAsPlace() {
+    async function useTypedNameAsPlace() {
       const name = (document.getElementById('addReviewRestaurantInput')?.value || state.restaurantSearch || '').trim();
       if (!name) return;
       const loc = state.userLocation || { lat: 37.37, lng: -122.03 };
-      selectPlace({ name: name, lat: loc.lat, lng: loc.lng });
+      const geocoded = await geocodePlace(name, loc.lat, loc.lng);
+      if (geocoded) selectPlace({ name: name, lat: geocoded.lat, lng: geocoded.lng });
+      else selectPlace({ name: name, lat: loc.lat, lng: loc.lng });
     }
 
     async function toggleLike(id) {
@@ -1163,7 +1175,8 @@
         if (idx >= 0) {
           let place = state.selectedPlace || { name: state.editingReview.restaurant, lat: state.editingReview.lat, lng: state.editingReview.lng };
           if (state.restaurantSearch.trim() && state.restaurantSearch.trim() !== state.editingReview.restaurant) {
-            const geocoded = await geocodePlace(state.restaurantSearch.trim());
+            const loc = state.userLocation || { lat: state.editingReview.lat, lng: state.editingReview.lng };
+            const geocoded = await geocodePlace(state.restaurantSearch.trim(), loc.lat, loc.lng);
             if (geocoded) place = { name: state.restaurantSearch.trim(), lat: geocoded.lat, lng: geocoded.lng };
             else if (!state.selectedPlace) place = { name: state.restaurantSearch.trim(), lat: state.editingReview.lat, lng: state.editingReview.lng };
           }
@@ -1179,7 +1192,7 @@
       if (!place && inputName) {
         const loc = state.userLocation || { lat: 37.37, lng: -122.03 };
         place = { name: inputName, lat: loc.lat, lng: loc.lng };
-        const geocoded = await geocodePlace(inputName);
+        const geocoded = await geocodePlace(inputName, loc.lat, loc.lng);
         if (geocoded) place = { name: inputName, lat: geocoded.lat, lng: geocoded.lng };
       }
       if (!place && !inputName) { alert('Please enter a restaurant name.'); return; }
