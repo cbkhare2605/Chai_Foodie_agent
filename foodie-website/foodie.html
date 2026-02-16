@@ -145,6 +145,7 @@
     .filter-btn:nth-child(4) { background: #ff8d00; }
     .filter-active { box-shadow: inset 0 0 0 3px white; }
     #map-container { height: 420px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; }
+    #restaurant-detail-map { height: 200px; width: 100%; border-radius: 12px; overflow: hidden; margin-top: 12px; }
     .map-marker.leaflet-marker-icon { background: none !important; border: none !important; }
     .map-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem; color: #666; flex-wrap: wrap; }
     .map-controls { position: absolute; top: 12px; right: 12px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
@@ -496,36 +497,46 @@
       }, 400);
     }
 
+    async function geocodePlaceOne(query, biasLat, biasLon, bbox) {
+      let loc = (biasLat != null && biasLon != null) ? { lat: biasLat, lng: biasLon } : (state.userLocation || null);
+      const results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null, bbox);
+      if (results.length > 0) return { lat: results[0].lat, lng: results[0].lng };
+      const viewbox = bbox ? bbox.minLon + ',' + bbox.minLat + ',' + bbox.maxLon + ',' + bbox.maxLat : null;
+      const data = await nominatimSearch(query, viewbox);
+      if (data?.length) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      return null;
+    }
     async function geocodePlace(query, biasLat, biasLon) {
       try {
         let loc = (biasLat != null && biasLon != null) ? { lat: biasLat, lng: biasLon } : (state.userLocation || null);
         let bbox = null;
-        if (queryLooksLikeDifferentLocation(query)) {
-          const parts = (query || '').split(',').map(p => p.trim()).filter(Boolean);
-          const cityState = parts.length >= 2 ? parts.slice(-2).join(', ') : '';
-          if (cityState.length >= 4) {
-            const region = await photonSearch(cityState, null, null);
-            if (region.length > 0) {
-              const cityCenter = { lat: region[0].lat, lng: region[0].lng };
-              const delta = 0.08;
-              bbox = { minLon: cityCenter.lng - delta, minLat: cityCenter.lat - delta, maxLon: cityCenter.lng + delta, maxLat: cityCenter.lat + delta };
-              loc = cityCenter;
-            }
+        const parts = (query || '').split(',').map(p => p.trim()).filter(Boolean);
+        const cityState = parts.length >= 2 ? parts.slice(-2).join(', ') : '';
+        if (cityState.length >= 4) {
+          const region = await photonSearch(cityState, null, null);
+          if (region.length > 0) {
+            const cityCenter = { lat: region[0].lat, lng: region[0].lng };
+            const delta = 0.08;
+            bbox = { minLon: cityCenter.lng - delta, minLat: cityCenter.lat - delta, maxLon: cityCenter.lng + delta, maxLat: cityCenter.lat + delta };
+            loc = cityCenter;
           }
         }
-        let results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null, bbox);
-        if (results.length > 0) return { lat: results[0].lat, lng: results[0].lng };
+        let r = await geocodePlaceOne(query, loc?.lat, loc?.lng, bbox);
+        if (r) return r;
+        if (bbox && parts.length > 2) {
+          const simplified = parts[0] + ', ' + cityState;
+          if (simplified !== query) r = await geocodePlaceOne(simplified, loc?.lat, loc?.lng, bbox);
+          if (r) return r;
+        }
         if (bbox) {
-          results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null, null);
-          if (results.length > 0) {
-            const cityLat = loc?.lat, cityLng = loc?.lng;
-            const inRange = results.find(r => cityLat != null && Math.abs(r.lat - cityLat) < 0.15 && Math.abs(r.lng - cityLng) < 0.15);
+          const results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null, null);
+          if (results.length > 0 && loc) {
+            const inRange = results.find(x => Math.abs(x.lat - loc.lat) < 0.15 && Math.abs(x.lng - loc.lng) < 0.15);
             if (inRange) return { lat: inRange.lat, lng: inRange.lng };
           }
         }
-        const viewbox = bbox ? bbox.minLon + ',' + bbox.minLat + ',' + bbox.maxLon + ',' + bbox.maxLat : null;
-        const data = await nominatimSearch(query, viewbox);
-        if (data?.length) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        r = await geocodePlaceOne(query, loc?.lat, loc?.lng, null);
+        if (r) return r;
         if (loc) return { lat: loc.lat, lng: loc.lng };
       } catch (e) {}
       return null;
@@ -755,6 +766,29 @@
     function showRestaurantOnMap(name, lat, lng) {
       state.mapFocusRestaurant = { name, lat, lng };
       setTab('map');
+    }
+    function initRestaurantDetailMap() {
+      const el = document.getElementById('restaurant-detail-map');
+      if (!el || !state.viewRestaurant || typeof L === 'undefined') return;
+      try { if (restaurantDetailMap) restaurantDetailMap.remove(); } catch (e) {}
+      restaurantDetailMap = L.map('restaurant-detail-map').setView([state.viewRestaurant.lat, state.viewRestaurant.lng], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(restaurantDetailMap);
+      L.marker([state.viewRestaurant.lat, state.viewRestaurant.lng]).addTo(restaurantDetailMap).bindPopup(escapeHtml(state.viewRestaurant.name||''));
+    }
+    async function fixLocationForRestaurant(restaurantName, oldLat, oldLng) {
+      const btn = document.getElementById('fixLocationBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Looking up...'; }
+      const loc = state.userLocation || null;
+      const geocoded = await geocodePlace(restaurantName, loc?.lat, loc?.lng);
+      if (!geocoded) { if (btn) { btn.disabled = false; btn.textContent = '🔧 Fix location'; } alert('Could not find location. Try editing the review with the full address including city and state.'); return; }
+      const toUpdate = state.reviews.filter(r => Math.abs(r.lat - oldLat) < 0.01 && Math.abs(r.lng - oldLng) < 0.01);
+      for (const r of toUpdate) {
+        r.lat = geocoded.lat; r.lng = geocoded.lng;
+        if (window.FOODIE_API?.enabled) try { await window.FOODIE_API.saveReview(r); } catch (e) { console.warn(e); }
+      }
+      if (!window.FOODIE_API?.enabled) saveToStorage();
+      if (state.viewRestaurant && Math.abs(state.viewRestaurant.lat - oldLat) < 0.01 && Math.abs(state.viewRestaurant.lng - oldLng) < 0.01) state.viewRestaurant = { ...state.viewRestaurant, lat: geocoded.lat, lng: geocoded.lng };
+      render();
     }
 
     async function sendConnectionRequest(toName) {
@@ -1360,6 +1394,7 @@
             <button class="review-action-btn" onclick="document.getElementById('commentInput${r.id}')?.focus()" aria-label="Comment">💬 Comment ${comments.length?`(${comments.length})`:''}</button>
             <button class="review-action-btn" onclick="shareReview('${r.id}')" aria-label="Share">↗️ Share</button>
             <button class="review-action-btn" onclick="showRestaurantOnMap('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" aria-label="View on map">📍 Map</button>
+            ${isOwn && Math.abs(r.lat - 37.37) < 0.1 && Math.abs(r.lng - (-122.03)) < 0.1 ? `<button class="review-action-btn" onclick="fixLocationForRestaurant('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="font-size:0.85rem" title="Location looks wrong">🔧 Fix location</button>` : ''}
             <button class="review-action-btn" onclick="toggleSaveById('${r.id}')" aria-label="Save">${saved?'🔖':'📑'} ${saved?'Saved':'Save'}</button>
             ${isOwn ? `<button class="review-action-btn" onclick="editReviewById('${r.id}')">✏️ Edit</button><button class="review-action-btn" onclick="deleteReviewById('${r.id}')" style="color:#c62828" aria-label="Delete">🗑️ Delete</button>` : ''}
           </div>
@@ -1678,6 +1713,8 @@
         const restReviews = state.reviews.filter(r => Math.abs(r.lat - vr.lat) < 0.01 && Math.abs(r.lng - vr.lng) < 0.01);
         const networkScore = getRestaurantNetworkScore(vr.lat, vr.lng);
         const cuisines = [...new Set(restReviews.map(r=>r.cuisine||'Various'))];
+        const looksWrong = Math.abs(vr.lat - 37.37) < 0.1 && Math.abs(vr.lng - (-122.03)) < 0.1;
+        const hasOwnReview = restReviews.some(r => r.by === state.user?.displayName);
         mainContent = `<div class="main">
           <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; state.viewRestaurant=null; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
           <div style="padding:20px;background:white;border-radius:12px;margin-bottom:16px">
@@ -1686,10 +1723,12 @@
               ${networkScore ? `<span style="font-weight:500;color:#333">Network: ${networkScore.avgRating} ★ (${networkScore.count} ${networkScore.count===1?'review':'reviews'})</span>` : ''}
               ${cuisines.length ? `<span>${cuisines.join(', ')}</span>` : ''}
             </div>
-            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;align-items:center">
               <a href="https://www.google.com/maps?q=${vr.lat},${vr.lng}" target="_blank" rel="noopener" style="color:#0a66c2;font-size:0.9rem">📍 Get directions</a>
               <button onclick="showRestaurantOnMap('${(vr.name||'').replace(/'/g,"\\'")}', ${vr.lat}, ${vr.lng})" style="padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">📍 View on map</button>
+              ${(looksWrong || hasOwnReview) ? `<button id="fixLocationBtn" onclick="fixLocationForRestaurant('${(vr.name||'').replace(/'/g,"\\'")}', ${vr.lat}, ${vr.lng})" style="padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">🔧 Fix location</button>` : ''}
             </div>
+            <div id="restaurant-detail-map"></div>
           </div>
           <h3 style="margin-bottom:12px">Reviews</h3>
           ${restReviews.length ? restReviews.map(r=>renderReviewCard(r)).join('') : '<p style="color:#666">No reviews yet.</p>'}
@@ -1893,9 +1932,11 @@
           </aside>
         </main>
       `;
+      if (state.panel === 'restaurant' && state.viewRestaurant) setTimeout(initRestaurantDetailMap, 50);
     }
 
     let map = null;
+    let restaurantDetailMap = null;
     let markers = [];
     let markerCluster = null;
     let userLocationMarker = null;
