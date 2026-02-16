@@ -27,6 +27,7 @@
     .menu-sidebar-item { display: block; width: 100%; padding: 14px 20px; text-align: left; border: none; background: none; color: white; font-size: 1.1rem; cursor: pointer; }
     .menu-sidebar-item:hover { background: rgba(255,255,255,0.1); }
     .logo { font-size: 1.4rem; font-weight: 600; }
+    .header-logo { height: 32px; width: auto; object-fit: contain; }
     
     .signup-page { min-height: 100vh; display: flex; flex-direction: column; }
     .signup-top { width: 100%; min-height: 40vh; background-color: #9e1212; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
@@ -1486,9 +1487,16 @@
     function closeReviewersModal() { state.viewReviewersReviewId = null; render(); }
 
     function updateFeedCards() {
+      const list = getFilteredReviews();
+      const statsEl = document.getElementById('feedStats');
+      if (statsEl) {
+        const l1 = list.filter(r => getEffectiveLevel(r) === 1).length;
+        const l2 = list.filter(r => getEffectiveLevel(r) === 2).length;
+        statsEl.textContent = list.length + ' reviews' + (l1 || l2 ? ' · 1st: ' + l1 + ' · 2nd: ' + l2 : '');
+      }
       const el = document.getElementById('feedCards');
       if (!el) return;
-      el.innerHTML = getFilteredReviews().map(r => renderReviewCard(r)).join('');
+      el.innerHTML = list.map(r => renderReviewCard(r)).join('');
     }
 
     function updateMapSearch() {
@@ -1790,6 +1798,7 @@
         mainContent = '<div class="main">' +
           (state.panel === 'myreviews' ? `<div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>` : '') +
           (state.panel === 'main' ? `<div class="feed-search" style="display:flex;gap:8px;align-items:center"><input type="text" id="feedSearchInput" placeholder="Search reviews, restaurants, or people..." value="${(state.feedSearch||'').replace(/"/g,'&quot;')}" oninput="state.feedSearch=this.value; updateFeedCards()" style="flex:1">${window.FOODIE_API?.enabled ? `<button onclick="refreshFeed()" title="Refresh from server" style="padding:10px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1.1rem">↻</button>` : ''}</div>
+            <div id="feedStats" style="font-size:0.9rem;color:#666;margin-bottom:12px">${(()=>{const list=getFilteredReviews();const l1=list.filter(r=>getEffectiveLevel(r)===1).length;const l2=list.filter(r=>getEffectiveLevel(r)===2).length;return list.length+' reviews'+(l1||l2?' · 1st: '+l1+' · 2nd: '+l2:'');})()}</div>
             <div class="feed-filters">
               <select onchange="state.feedCuisine=this.value; updateFeedCards()" style="padding:8px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem">
                 <option value="">All cuisines</option>${CUISINES.map(c=>`<option value="${c}" ${state.feedCuisine===c?'selected':''}>${c}</option>`).join('')}
@@ -1971,7 +1980,7 @@
         <div class="top-bar">
           <div class="header">
             <button class="menu-btn" onclick="openMenu()">☰</button>
-            <h1 class="logo">Foodie</h1>
+            <img src="logo/Foodie_white.svg" alt="Foodie" class="header-logo">
           </div>
           <nav class="tabs">
             <button class="tab ${state.tab==='feed'?'active':''}" onclick="setTab('feed')">📋 Feed</button>
