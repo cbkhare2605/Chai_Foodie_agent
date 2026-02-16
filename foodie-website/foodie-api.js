@@ -262,6 +262,13 @@
     return data?.id;
   }
 
+  async function searchProfiles(query) {
+    const q = (query || '').trim();
+    if (q.length < 2) return [];
+    const { data } = await supabase.from('profiles').select('id, display_name, avatar_url').ilike('display_name', '%' + q + '%').limit(20);
+    return (data || []).map(p => ({ id: p.id, displayName: p.display_name, avatarUrl: p.avatar_url }));
+  }
+
   async function saveReview(review) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not signed in');
@@ -437,6 +444,7 @@
     signIn,
     signOut,
     getUserIdByDisplayName,
+    searchProfiles,
     saveReview,
     deleteReview,
     fixReviewLocation,

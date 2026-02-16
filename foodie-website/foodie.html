@@ -362,6 +362,9 @@
       commentInput: {},
       viewConnections: false,
       addConnectionInput: '',
+      networkSearch: '',
+      networkSearchResults: [],
+      networkSearchLoading: false,
       mapCuisine: '',
       mapPrice: '',
       mapMinRating: 0,
@@ -951,6 +954,13 @@
       openFixLocationModal(restaurantName, oldLat, oldLng);
     }
 
+    async function connectFromSearch(displayName) {
+      await sendConnectionRequest(displayName);
+      state.networkSearch = ''; state.networkSearchResults = [];
+      const el = document.getElementById('networkSearchInput');
+      if (el) el.value = '';
+      if (window.FOODIE_API?.enabled) await refreshFeed(); else render();
+    }
     async function sendConnectionRequest(toName) {
       if (!toName || !toName.trim()) return;
       const from = state.user.displayName;
@@ -1097,6 +1107,30 @@
     }
     function hasPendingRequestTo(name) {
       return (state.connectionRequests || []).some(r => r.from === state.user?.displayName && r.to === name && r.status === 'pending');
+    }
+    let networkSearchTimer = null;
+    async function runNetworkSearch() {
+      const q = (state.networkSearch || '').trim();
+      if (q.length < 2 || !window.FOODIE_API?.enabled) { state.networkSearchResults = []; state.networkSearchLoading = false; render(); return; }
+      state.networkSearchLoading = true;
+      render();
+      try {
+        const results = await window.FOODIE_API.searchProfiles(q);
+        const me = state.user?.displayName;
+        const conns = state.connections[me] || [];
+        const pendingFromMe = (state.connectionRequests || []).filter(r => r.from === me && r.status === 'pending').map(r => r.to);
+        state.networkSearchResults = (results || []).filter(p => p.displayName !== me && !conns.includes(p.displayName) && !pendingFromMe.includes(p.displayName));
+      } catch (e) { state.networkSearchResults = []; }
+      state.networkSearchLoading = false;
+      render();
+    }
+    function onNetworkSearchInput() {
+      state.networkSearch = document.getElementById('networkSearchInput')?.value || '';
+      clearTimeout(networkSearchTimer);
+      if ((state.networkSearch || '').trim().length < 2) { state.networkSearchResults = []; state.networkSearchLoading = false; render(); return; }
+      state.networkSearchLoading = true;
+      networkSearchTimer = setTimeout(runNetworkSearch, 350);
+      render();
     }
 
     function isSafePhotoUrl(url) {
@@ -1865,12 +1899,26 @@
           <h3 style="margin-bottom:8px;font-size:1rem;color:#333">Invite friends not on Foodie</h3>
           <p style="font-size:0.85rem;color:#666;margin-bottom:12px">Share a link via WhatsApp, Messages, or email. When they sign up, they'll get your connection request.</p>
           <button onclick="shareApp(true)" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 20px;margin-bottom:24px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:500">📤 Invite via link</button>
-          <h3 style="margin-bottom:8px;font-size:1rem;color:#333">Connect with someone on Foodie</h3>
-          <p style="font-size:0.85rem;color:#666;margin-bottom:8px">Type their display name (exact match) to send a connection request.</p>
+          ${window.FOODIE_API?.enabled ? `<h3 style="margin-bottom:8px;font-size:1rem;color:#333">Search people on Foodie</h3>
+          <p style="font-size:0.85rem;color:#666;margin-bottom:12px">Search by name (min 2 characters). Results update as you type.</p>
+          <div style="margin-bottom:16px">
+            <input type="text" id="networkSearchInput" placeholder="Search by name..." value="${(state.networkSearch||'').replace(/"/g,'&quot;')}" oninput="onNetworkSearchInput()" style="width:100%;padding:12px 16px;border:1px solid #ddd;border-radius:8px;font-size:1rem">
+          </div>
+          ${(state.networkSearch||'').trim().length >= 2 ? (state.networkSearchLoading ? '<p style="color:#666;padding:16px;background:#f9f9f9;border-radius:8px;margin-bottom:24px">Searching...</p>' : state.networkSearchResults.length ? `<div style="margin-bottom:24px">${state.networkSearchResults.map(p=>{
+            const av = p.avatarUrl && isSafePhotoUrl(p.avatarUrl) ? p.avatarUrl : '';
+            return `<div class="network-card" style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div class="review-avatar" style="width:48px;height:48px;font-size:1rem${av?';background-image:url('+av+');background-size:cover;background-position:center':''}">${av?'':getInitials(p.displayName)}</div>
+                <div style="font-weight:600">${escapeHtml(p.displayName)}</div>
+              </div>
+              <button onclick="connectFromSearch('${(p.displayName||'').replace(/'/g,"\\'")}')" style="padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Connect</button>
+            </div>`;
+          }).join('')}</div>` : '<p style="color:#666;padding:16px;background:#f9f9f9;border-radius:8px;margin-bottom:24px">No results. Try a different name.</p>') : ''}` : `<h3 style="margin-bottom:8px;font-size:1rem;color:#333">Connect with someone</h3>
+          <p style="font-size:0.85rem;color:#666;margin-bottom:8px">Type their display name to send a connection request.</p>
           <div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap">
             <input type="text" id="inviteNameInput" placeholder="e.g. John, Priya Sharma" value="${(state.addConnectionInput||'').replace(/"/g,'&quot;')}" oninput="state.addConnectionInput=this.value" style="flex:1;min-width:180px;padding:12px 16px;border:1px solid #ddd;border-radius:8px;font-size:1rem">
             <button onclick="var n=document.getElementById('inviteNameInput')?.value?.trim(); if(n){sendConnectionRequest(n); state.addConnectionInput=''; if(n)document.getElementById('inviteNameInput').value=''; render()}" style="padding:12px 20px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Send request</button>
-          </div>
+          </div>`}
           ${pendingForMe.length ? `
           <h3 style="margin-bottom:12px;font-size:1rem;color:#333">Invitations (${pendingForMe.length})</h3>
           <p style="font-size:0.9rem;color:#666;margin-bottom:12px">These people want to connect with you. Approve to add them to your network.</p>
