@@ -366,7 +366,8 @@
       savedListFilter: 'Saved',
       mapFocusRestaurant: null,
       pendingConnect: null,
-      authMode: 'signup'
+      authMode: 'signup',
+      viewLikersReviewId: null
     };
     async function bootstrapApp() {
       const hashParams = new URLSearchParams((location.hash || '').replace(/^#/, ''));
@@ -534,16 +535,35 @@
       selectPlace({ name: name, lat: loc.lat, lng: loc.lng });
     }
 
-    function toggleLike(id) {
+    async function toggleLike(id) {
       const r = state.reviews.find(x => x.id === id);
-      if (r) {
-        r.liked = !r.liked;
-        r.likes = (r.likes||0) + (r.liked ? 1 : -1);
-        if (r.liked && r.by !== state.user?.displayName) {
+      if (!r) return;
+      const add = !r.liked;
+      if (!r.likedBy) r.likedBy = [];
+      if (add) {
+        r.liked = true;
+        r.likes = (r.likes||0) + 1;
+        if (!r.likedBy.includes(state.user?.displayName)) r.likedBy.push(state.user?.displayName);
+        if (r.by !== state.user?.displayName) {
           state.notifications.push({ id: Date.now().toString(), type: 'like', text: `${state.user.displayName} liked your review of ${r.restaurant}`, read: false, date: Date.now() });
         }
-        saveToStorage(); render();
+      } else {
+        r.liked = false;
+        r.likes = Math.max(0, (r.likes||0) - 1);
+        r.likedBy = (r.likedBy || []).filter(n => n !== state.user?.displayName);
       }
+      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.toggleLike(id, add); } catch (e) { console.warn(e); if (add) { r.liked = false; r.likes = Math.max(0, (r.likes||0) - 1); r.likedBy = (r.likedBy || []).filter(n => n !== state.user?.displayName); } else { r.liked = true; r.likes = (r.likes||0) + 1; if (!r.likedBy.includes(state.user?.displayName)) r.likedBy.push(state.user?.displayName); } } } else saveToStorage();
+      render();
+    }
+    function showLikersModal(reviewId) {
+      const r = state.reviews.find(x => x.id === reviewId);
+      if (!r || !(r.likedBy || []).length) return;
+      state.viewLikersReviewId = reviewId;
+      render();
+    }
+    function closeLikersModal() {
+      state.viewLikersReviewId = null;
+      render();
     }
 
     function getComments(reviewId) {
@@ -1298,7 +1318,7 @@
             <div class="review-rating">${'❤️'.repeat(r.rating)}</div>
           </div>
           <div class="review-actions">
-            <button class="review-action-btn ${r.liked?'liked':''}" onclick="toggleLike('${r.id}')" aria-label="Like">${r.liked?'❤️':'🤍'} Like</button>
+            <button class="review-action-btn ${r.liked?'liked':''}" onclick="toggleLike('${r.id}')" aria-label="Like" title="${((r.likedBy||[]).length) ? 'Liked by ' + (r.likedBy||[]).slice(0,3).join(', ') + ((r.likedBy||[]).length>3 ? ' and ' + ((r.likedBy||[]).length-3) + ' more' : '') : 'Like'}">${r.liked?'❤️':'🤍'} Like</button>
             <button class="review-action-btn" onclick="document.getElementById('commentInput${r.id}')?.focus()" aria-label="Comment">💬 Comment ${comments.length?`(${comments.length})`:''}</button>
             <button class="review-action-btn" onclick="shareReview('${r.id}')" aria-label="Share">↗️ Share</button>
             <button class="review-action-btn" onclick="showRestaurantOnMap('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" aria-label="View on map">📍 Map</button>
@@ -1328,13 +1348,14 @@
               <button onclick="var i=document.getElementById('commentInput${r.id}'); addComment('${r.id}',i.value); i.value=''">Post</button>
             </div>
           </div>` : ''}
-          ${(r.likes||0) > 0 ? `<div style="padding: 0 16px 4px 76px; font-size: 0.8rem; color: #666;">${r.likes} ${r.likes===1?'like':'likes'}</div>` : ''}
+          ${(r.likes||0) > 0 ? `<div style="padding: 0 16px 4px 76px; font-size: 0.8rem; color: #666; cursor: pointer; text-decoration: underline; text-underline-offset: 2px" onclick="showLikersModal('${r.id}')" title="${(r.likedBy||[]).join(', ')}">${r.likes} ${r.likes===1?'like':'likes'}</div>` : ''}
         </div>
       `;
     }
 
     function openMenu() { state.menuOpen = true; render(); }
     function closeMenu() { state.menuOpen = false; render(); }
+    function closeLikersModal() { state.viewLikersReviewId = null; render(); }
 
     function updateFeedCards() {
       const el = document.getElementById('feedCards');
@@ -1774,6 +1795,16 @@
           </nav>
         </div>
       ` : '';
+      const likersModalHtml = state.viewLikersReviewId ? (() => {
+        const r = state.reviews.find(x => x.id === state.viewLikersReviewId);
+        const likers = (r?.likedBy || []);
+        return `<div class="menu-overlay" onclick="closeLikersModal()" style="z-index:150"></div>
+        <div style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:white;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.2);max-width:320px;width:90%;max-height:70vh;overflow:auto;z-index:151;padding:20px">
+          <h3 style="margin:0 0 16px 0;font-size:1.1rem">Liked by</h3>
+          <div style="display:flex;flex-direction:column;gap:8px">${likers.map(n=>{const av=getSafeAvatarUrl(state.profiles[n]);return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f9f9f9;border-radius:8px"><span class="review-avatar" style="width:36px;height:36px;font-size:0.9rem${av?';background-image:url('+av+');background-size:cover;background-position:center' : ''}">${av?'':getInitials(n)}</span><span style="font-weight:500">${escapeHtml(n)}</span></div>`}).join('')}</div>
+          <button onclick="closeLikersModal()" style="margin-top:16px;padding:10px 20px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;width:100%">Close</button>
+        </div>`;
+      })() : '';
       app.innerHTML = `
         <div class="top-bar">
           <div class="header">
@@ -1788,6 +1819,7 @@
           </nav>
         </div>
         ${sidebarHtml}
+        ${likersModalHtml}
         <main id="main" class="app-content" role="main">
           <div class="app-content-inner">${mainContent}</div>
           <aside class="ad-strip" aria-label="Advertisement">

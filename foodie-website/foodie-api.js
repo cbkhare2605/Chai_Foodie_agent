@@ -38,7 +38,7 @@
     const myProfile = await getProfileByUserId(user.id);
     const displayName = myProfile?.display_name || user.email?.split('@')[0] || 'User';
 
-    const [reviewsRes, commentsRes, connRes, reqRes, savedRes, notesRes, notifRes, listRes, profilesRes] = await Promise.all([
+    const [reviewsRes, commentsRes, connRes, reqRes, savedRes, notesRes, notifRes, listRes, profilesRes, likesRes] = await Promise.all([
       supabase.from('reviews').select('*').order('created_at', { ascending: false }),
       supabase.from('comments').select('*'),
       supabase.from('connections').select('user_a, user_b'),
@@ -47,29 +47,40 @@
       supabase.from('private_notes').select('review_id, note').eq('user_id', user.id),
       supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
       supabase.from('group_list_items').select('list_name, saved_key').eq('user_id', user.id),
-      supabase.from('profiles').select('id, display_name, bio, avatar_url')
+      supabase.from('profiles').select('id, display_name, bio, avatar_url'),
+      supabase.from('review_likes').select('review_id, user_id')
     ]);
 
     const profileById = {};
     (profilesRes.data || []).forEach(p => { profileById[p.id] = p; });
 
-    const allReviews = (reviewsRes.data || []).map(r => ({
-      id: r.id,
-      restaurant: r.restaurant,
-      lat: r.lat,
-      lng: r.lng,
-      by: profileById[r.user_id]?.display_name || 'Unknown',
-      text: r.text,
-      rating: r.rating,
-      date: r.created_at,
-      cuisine: r.cuisine || 'Various',
-      price: r.price || 2,
-      photos: r.photos || [],
-      verifiedVisit: r.verified_visit || false,
-      wouldGoAgain: r.would_go_again !== false,
-      likes: r.likes || 0,
-      liked: false
-    }));
+    const likesByReview = {};
+    (likesRes.data || []).forEach(l => {
+      if (!likesByReview[l.review_id]) likesByReview[l.review_id] = [];
+      const name = profileById[l.user_id]?.display_name;
+      if (name) likesByReview[l.review_id].push(name);
+    });
+    const allReviews = (reviewsRes.data || []).map(r => {
+      const likedBy = likesByReview[r.id] || [];
+      return {
+        id: r.id,
+        restaurant: r.restaurant,
+        lat: r.lat,
+        lng: r.lng,
+        by: profileById[r.user_id]?.display_name || 'Unknown',
+        text: r.text,
+        rating: r.rating,
+        date: r.created_at,
+        cuisine: r.cuisine || 'Various',
+        price: r.price || 2,
+        photos: r.photos || [],
+        verifiedVisit: r.verified_visit || false,
+        wouldGoAgain: r.would_go_again !== false,
+        likes: likedBy.length,
+        liked: likedBy.includes(displayName),
+        likedBy
+      };
+    });
 
     const connections = {};
     for (const c of (connRes.data || [])) {
@@ -91,7 +102,7 @@
     let reviews = allReviews.filter(r => visibleNames.has(r.by));
 
     if (reviews.length < 15 && window.FOODIE_SEED_REVIEWS?.length) {
-      const seed = window.FOODIE_SEED_REVIEWS.map(r => ({ ...r, date: r.date || Date.now() - 86400000 }));
+      const seed = window.FOODIE_SEED_REVIEWS.map(r => ({ ...r, date: r.date || Date.now() - 86400000, likedBy: r.likedBy || [] }));
       reviews = [...reviews, ...seed].sort((a, b) => (b.date || 0) - (a.date || 0));
     }
 
@@ -200,6 +211,18 @@
 
   async function deleteReview(id) {
     await supabase.from('reviews').delete().eq('id', id);
+  }
+
+  async function toggleLike(reviewId, add) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not signed in');
+    if (add) {
+      const { error } = await supabase.from('review_likes').upsert({ review_id: reviewId, user_id: user.id }, { onConflict: 'review_id,user_id' });
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('review_likes').delete().eq('review_id', reviewId).eq('user_id', user.id);
+      if (error) throw error;
+    }
   }
 
   async function addComment(reviewId, text) {
@@ -328,6 +351,7 @@
     getUserIdByDisplayName,
     saveReview,
     deleteReview,
+    toggleLike: toggleLike,
     addComment,
     sendConnectionRequest,
     acceptConnectionRequest,
