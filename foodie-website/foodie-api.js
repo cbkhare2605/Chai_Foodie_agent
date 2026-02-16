@@ -194,8 +194,6 @@
     const id = 'g_' + crypto.randomUUID().replace(/-/g, '');
     const { error: groupErr } = await supabase.from('groups').insert({ id, name, created_by: user.id });
     if (groupErr) throw groupErr;
-    const { error: memberErr } = await supabase.from('group_members').insert({ group_id: id, user_id: user.id });
-    if (memberErr) throw memberErr;
     return id;
   }
 
