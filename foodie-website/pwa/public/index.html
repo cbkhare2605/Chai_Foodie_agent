@@ -187,7 +187,6 @@
   </div>
   <script src="config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="seed-reviews.js"></script>
   <script src="foodie-api.js"></script>
   <script>
     function formatDate(ts) {
@@ -1334,8 +1333,7 @@
 
     function getMapRestaurants() {
       let list = state.reviews;
-      if (state.mapFilter === '0') list = list.filter(r => r.seed);
-      else if (state.mapFilter === '1') list = list.filter(r => getEffectiveLevel(r) === 1);
+      if (state.mapFilter === '1') list = list.filter(r => getEffectiveLevel(r) === 1);
       else if (state.mapFilter === '2') list = list.filter(r => getEffectiveLevel(r) === 2);
       if (state.mapCuisine) list = list.filter(r => (r.cuisine||'Various') === state.mapCuisine);
       if (state.mapPrice) list = list.filter(r => (r.price||2) <= parseInt(state.mapPrice));
@@ -1871,7 +1869,6 @@
             </div>
             <div class="map-filters">
               <button class="filter-btn ${state.mapFilter==='all'?'filter-active':''}" onclick="filterMap('all')">📍 Total (${total})</button>
-              <button class="filter-btn ${state.mapFilter==='0'?'filter-active':''}" onclick="filterMap('0')">📍 Discover (${state.reviews.filter(r=>r.seed).length})</button>
               <button class="filter-btn ${state.mapFilter==='1'?'filter-active':''}" onclick="filterMap('1')">📍 1st Level (${l1})</button>
               <button class="filter-btn ${state.mapFilter==='2'?'filter-active':''}" onclick="filterMap('2')">📍 2nd Level (${l2})</button>
             </div>
@@ -1895,7 +1892,6 @@
               </div>
             </div>
             <div class="map-legend">
-              <span><span class="map-legend-dot" style="background:#7c4dff"></span> Discover</span>
               <span><span class="map-legend-dot" style="background:#006CE0"></span> 1st level</span>
               <span><span class="map-legend-dot" style="background:#FF8D00"></span> 2nd level</span>
               <span><span class="map-legend-dot" style="background:#e31919"></span> Your review</span>
