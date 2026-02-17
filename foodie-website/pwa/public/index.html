@@ -1130,7 +1130,8 @@
     function getPeopleYouCanAdd() {
       const me = state.user?.displayName;
       if (!me) return [];
-      const allUsers = [...new Set([...DEMO_USERS, ...state.reviews.map(r => r.by)].filter(Boolean))];
+      const fromReviews = [...new Set((state.reviews || []).map(r => r.by).filter(Boolean))];
+      const allUsers = fromReviews.filter(u => !DEMO_USERS.includes(u));
       const conns = state.connections[me] || [];
       const reqs = state.connectionRequests || [];
       const pendingFromMe = reqs.filter(r => r.from === me && r.status === 'pending').map(r => r.to);
@@ -1146,7 +1147,7 @@
       myConns.forEach(friend => {
         const friendsOfFriend = state.connections[friend] || [];
         friendsOfFriend.forEach(person => {
-          if (person === me || myConns.includes(person) || pendingFromMe.includes(person)) return;
+          if (person === me || myConns.includes(person) || pendingFromMe.includes(person) || DEMO_USERS.includes(person)) return;
           if (!suggestions.includes(person)) suggestions.push(person);
           mutualCount[person] = (mutualCount[person] || 0) + 1;
         });
@@ -1180,7 +1181,7 @@
         const me = state.user?.displayName;
         const conns = state.connections[me] || [];
         const pendingFromMe = (state.connectionRequests || []).filter(r => r.from === me && r.status === 'pending').map(r => r.to);
-        state.networkSearchResults = (results || []).filter(p => p.displayName !== me && !conns.includes(p.displayName) && !pendingFromMe.includes(p.displayName));
+        state.networkSearchResults = (results || []).filter(p => p.displayName !== me && !conns.includes(p.displayName) && !pendingFromMe.includes(p.displayName) && !DEMO_USERS.includes(p.displayName));
       } catch (e) { state.networkSearchResults = []; }
       state.networkSearchLoading = false;
       render();
@@ -1202,7 +1203,7 @@
         const me = state.user?.displayName;
         const conns = state.connections[me] || [];
         const pendingFromMe = (state.connectionRequests || []).filter(r => r.from === me && r.status === 'pending').map(r => r.to);
-        state.suggestedUsers = (results || []).filter(p => p.displayName !== me && !conns.includes(p.displayName) && !pendingFromMe.includes(p.displayName));
+        state.suggestedUsers = (results || []).filter(p => p.displayName !== me && !conns.includes(p.displayName) && !pendingFromMe.includes(p.displayName) && !DEMO_USERS.includes(p.displayName));
       } catch (e) { state.suggestedUsers = []; }
       state.suggestedUsersLoading = false;
       render();
