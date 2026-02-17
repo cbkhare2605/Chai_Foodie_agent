@@ -385,6 +385,9 @@
       networkSearch: '',
       networkSearchResults: [],
       networkSearchLoading: false,
+      suggestedUsers: [],
+      suggestedUsersLoading: false,
+      _suggestedUsersFetched: false,
       mapCuisine: '',
       mapPrice: '',
       mapMinRating: 0,
@@ -1026,6 +1029,7 @@
       state.connectionRequests = reqs;
       state.notifications.push({ id: Date.now().toString(), type: 'request', text: `Connection request sent to ${to}. They'll need to approve.`, read: false, date: Date.now() });
       state.notifications.push({ id: Date.now().toString(), type: 'connection_request', text: `${from} wants to connect with you`, read: false, date: Date.now(), recipient: to });
+      state.suggestedUsers = (state.suggestedUsers || []).filter(p => p.displayName !== to);
       if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.sendConnectionRequest(to, reqId); } catch (e) { console.warn(e); } } else saveToStorage();
       render();
     }
@@ -1187,6 +1191,21 @@
       if ((state.networkSearch || '').trim().length < 2) { state.networkSearchResults = []; state.networkSearchLoading = false; render(); return; }
       state.networkSearchLoading = true;
       networkSearchTimer = setTimeout(runNetworkSearch, 350);
+    }
+    async function loadSuggestedUsers() {
+      if (!window.FOODIE_API?.enabled || !window.FOODIE_API.getSuggestedUsers) return;
+      state.suggestedUsersLoading = true;
+      state._suggestedUsersFetched = true;
+      render();
+      try {
+        const results = await window.FOODIE_API.getSuggestedUsers();
+        const me = state.user?.displayName;
+        const conns = state.connections[me] || [];
+        const pendingFromMe = (state.connectionRequests || []).filter(r => r.from === me && r.status === 'pending').map(r => r.to);
+        state.suggestedUsers = (results || []).filter(p => p.displayName !== me && !conns.includes(p.displayName) && !pendingFromMe.includes(p.displayName));
+      } catch (e) { state.suggestedUsers = []; }
+      state.suggestedUsersLoading = false;
+      render();
     }
 
     function isSafePhotoUrl(url) {
@@ -2019,10 +2038,25 @@
           ${getReviewsForList(listName).length ? getReviewsForList(listName).map(r=>renderReviewCard(r)).join('') : '<p style="color:#666">No restaurants in this list yet. Use the List button on reviews to add.</p>'}
         </div>`;
       } else if (state.panel === 'network') {
+        if (window.FOODIE_API?.enabled && !state._suggestedUsersFetched) loadSuggestedUsers();
         const pendingForMe = getPendingRequestsForMe();
         const peopleToAdd = getPeopleYouCanAdd();
         const peopleYouMightKnow = getPeopleYouMightKnow();
         const conns = state.connections[state.user?.displayName] || [];
+        const suggestedSection = (window.FOODIE_API?.enabled && (conns.length === 0 || state.suggestedUsers.length > 0)) ? `
+          <h3 style="margin-bottom:8px;font-size:1rem;color:#333">People on Foodie</h3>
+          <p style="font-size:0.85rem;color:#666;margin-bottom:12px">Others who use the app. Connect to see their reviews.</p>
+          ${state.suggestedUsersLoading ? '<p style="color:#666;padding:16px;background:#f9f9f9;border-radius:8px;margin-bottom:24px">Loading...</p>' : state.suggestedUsers.length ? `<div style="margin-bottom:24px">${state.suggestedUsers.map(p=>{
+            const av = p.avatarUrl && isSafePhotoUrl(p.avatarUrl) ? p.avatarUrl : '';
+            return `<div class="network-card" style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:white;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div class="review-avatar" style="width:48px;height:48px;font-size:1rem${av?';background-image:url('+av+');background-size:cover;background-position:center':''}">${av?'':getInitials(p.displayName)}</div>
+                <div style="font-weight:600">${escapeHtml(p.displayName)}</div>
+              </div>
+              <button onclick="connectFromSearch('${(p.displayName||'').replace(/'/g,"\\'")}')" style="padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:500">Connect</button>
+            </div>`;
+          }).join('')}</div>` : '<p style="color:#666;padding:16px;background:#f9f9f9;border-radius:8px;margin-bottom:24px">No one else on Foodie yet. Invite friends to join!</p>'}
+        ` : '';
         mainContent = `<div class="main">
           <div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>
           <h2 style="margin-bottom:20px">Network</h2>
@@ -2030,6 +2064,7 @@
           <h3 style="margin-bottom:8px;font-size:1rem;color:#333">Invite friends not on Foodie</h3>
           <p style="font-size:0.85rem;color:#666;margin-bottom:12px">Share a link via WhatsApp, Messages, or email. When they sign up, they'll get your connection request.</p>
           <button onclick="shareApp(true)" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 20px;margin-bottom:24px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:500">📤 Invite via link</button>
+          ${suggestedSection}
           ${window.FOODIE_API?.enabled ? `<h3 style="margin-bottom:8px;font-size:1rem;color:#333">Search people on Foodie</h3>
           <p style="font-size:0.85rem;color:#666;margin-bottom:12px">Search by name (min 2 characters). Results update as you type.</p>
           <div style="margin-bottom:16px">
@@ -2216,6 +2251,19 @@
             <div class="feed-compose-avatar">${getInitials(state.user.displayName)}</div>
             <span class="feed-compose-text">Share a restaurant review</span>
           </div>` : '') +
+          (state.panel === 'main' && reviews.length === 0 && (state.connections[state.user?.displayName] || []).length === 0 ? `
+          <div class="empty-feed-card" style="padding:24px;background:linear-gradient(135deg,#f8f9fa 0%,#e9ecef 100%);border-radius:12px;margin-bottom:16px;border:1px solid #dee2e6">
+            <h3 style="margin:0 0 12px 0;font-size:1.2rem;color:#333">Get started</h3>
+            <p style="margin:0 0 16px 0;font-size:0.95rem;color:#666;line-height:1.5">Your feed is empty. Connect with people to see their restaurant reviews.</p>
+            <p style="margin:0 0 16px 0;font-size:0.9rem;color:#555"><strong>How to connect:</strong></p>
+            <ul style="margin:0 0 16px 0;padding-left:20px;font-size:0.9rem;color:#555;line-height:1.6">
+              <li><strong>People on Foodie</strong> — Go to Network to see others who use the app</li>
+              <li><strong>Invite friends</strong> — Share your link; when they sign up, they can connect with you</li>
+              <li><strong>Search by name</strong> — If someone is already on Foodie, search for them in Network</li>
+            </ul>
+            <button onclick="setTab('network'); state.panel='network'; render()" style="padding:12px 24px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:1rem">Go to Network →</button>
+          </div>
+          ` : '') +
           `<div id="feedCards">` + reviews.map(r => renderReviewCard(r)).join('') + '</div></div>';
       } else if (state.tab === 'add' && state.panel === 'main') {
         const isEditing = !!state.editingReview;

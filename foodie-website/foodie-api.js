@@ -260,6 +260,16 @@
     return (data || []).map(p => ({ id: p.id, displayName: p.display_name, avatarUrl: p.avatar_url }));
   }
 
+  async function getSuggestedUsers() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+    const { data: rows } = await supabase.from('reviews').select('user_id').is('deleted_at', null);
+    const userIds = [...new Set((rows || []).map(r => r.user_id).filter(id => id && id !== user.id))].slice(0, 25);
+    if (userIds.length === 0) return [];
+    const { data: profiles } = await supabase.from('profiles').select('id, display_name, avatar_url').in('id', userIds);
+    return (profiles || []).map(p => ({ id: p.id, displayName: p.display_name, avatarUrl: p.avatar_url }));
+  }
+
   async function saveReview(review) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not signed in');
@@ -453,6 +463,7 @@
     signOut,
     getUserIdByDisplayName,
     searchProfiles,
+    getSuggestedUsers,
     saveReview,
     deleteReview,
     fixReviewLocation,
