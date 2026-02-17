@@ -966,7 +966,7 @@
       if (!m || !document.getElementById('fix-location-map') || typeof L === 'undefined') return;
       try { if (fixLocationMap) fixLocationMap.remove(); } catch (e) {}
       fixLocationMap = L.map('fix-location-map', { minZoom: 1, maxZoom: 19 }).setView([m.pinLat, m.pinLng], 14);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', subdomains: 'abc', maxZoom: 19 }).addTo(fixLocationMap);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(fixLocationMap);
       fixLocationMarker = L.marker([m.pinLat, m.pinLng], { draggable: true }).addTo(fixLocationMap);
       fixLocationMarker.on('dragend', function() {
         const pos = fixLocationMarker.getLatLng();
@@ -2346,12 +2346,12 @@
                 <option value="5" ${state.mapMinRating==5?'selected':''}>5 stars only</option>
               </select>
             </div>
-            <p style="font-size:0.85rem;color:#666;margin-bottom:8px">Gray dots = nearby restaurants (OpenStreetMap). Hover for name, click to add a review. Tap 🔄 to refresh.</p>
+            <p style="font-size:0.85rem;color:#666;margin-bottom:8px">Gray dots = nearby restaurants. Hover for name, click to add a review. Tap 🔄 to refresh.</p>
             <div style="position:relative">
               <div id="map-container"></div>
               <div class="map-controls" id="mapControls">
                 <button class="map-control-btn" onclick="myLocationMap()" title="My location">📍</button>
-                <button class="map-control-btn" onclick="loadPoiMarkers()" title="Refresh nearby restaurants">🔄</button>
+                <button class="map-control-btn" onclick="showListToast('Loading nearby...'); loadPoiMarkers(0)" title="Refresh nearby restaurants">🔄</button>
               </div>
             </div>
             <div class="map-legend">
@@ -2482,16 +2482,15 @@
         const s = bounds.getSouth(), w = bounds.getWest(), n = bounds.getNorth(), e = bounds.getEast();
         const reviewedKeys = new Set(getMapRestaurants().map(r => r.lat.toFixed(5) + ',' + r.lng.toFixed(5)));
         const query = '[out:json][timeout:15];(node["amenity"="restaurant"](' + s + ',' + w + ',' + n + ',' + e + ');node["amenity"="cafe"](' + s + ',' + w + ',' + n + ',' + e + ');node["amenity"="fast_food"](' + s + ',' + w + ',' + n + ',' + e + '););out body 200;';
-        const body = 'data=' + encodeURIComponent(query);
-        const endpoints = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.openstreetmap.fr/api/interpreter'];
         let data = null;
-        for (const url of endpoints) {
+        try {
+          const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
+          data = await res.json();
+        } catch (e1) {
           try {
-            const res = await fetch(url, { method: 'POST', body: body, headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, mode: 'cors' });
-            if (!res.ok) continue;
-            data = await res.json();
-            if (data && data.elements) break;
-          } catch (err) { continue; }
+            const res2 = await fetch('https://overpass.kumi.systems/api/interpreter', { method: 'POST', body: query });
+            data = await res2.json();
+          } catch (e2) { throw e1; }
         }
         if (!data || !data.elements) {
           if ((retryCount || 0) < 1) setTimeout(function() { loadPoiMarkers((retryCount || 0) + 1); }, 2500);
@@ -2662,7 +2661,7 @@
       const toShow = filtered.length ? filtered : restaurants;
       const center = toShow.length ? [toShow[0].lat, toShow[0].lng] : [37.37, -122.03];
       map = L.map('map-container', { minZoom: 1, maxZoom: 19, zoomAnimation: false }).setView(center, 10);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', subdomains: 'abc', maxZoom: 19 }).addTo(map);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map);
       map.whenReady(function() {
         setTimeout(function() { try { if (map) map.invalidateSize(); } catch(e) {} }, 100);
         setTimeout(function() { try { if (map) map.invalidateSize(); } catch(e) {} }, 500);
