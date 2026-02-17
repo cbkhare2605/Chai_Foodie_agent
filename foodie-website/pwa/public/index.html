@@ -152,6 +152,8 @@
     #fix-location-map { height: 300px; min-height: 300px; width: 100%; border-radius: 12px; overflow: hidden; }
     .map-marker.leaflet-marker-icon { background: none !important; border: none !important; }
     .poi-tooltip { font-size: 0.85rem; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+    .leaflet-top, .leaflet-left { transform: translate3d(0, 0, 0); -webkit-transform: translate3d(0, 0, 0); will-change: transform; }
+    #map-container { transform: translateZ(0); -webkit-transform: translateZ(0); }
     .map-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem; color: #666; flex-wrap: wrap; }
     .map-controls { position: absolute; top: 12px; right: 12px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
     .map-control-btn { width: 40px; height: 40px; border-radius: 50%; background: white; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; }
@@ -2565,7 +2567,7 @@
       const filtered = q ? restaurants.filter(r => (r.name||'').toLowerCase().includes(q)) : restaurants;
       const toShow = filtered.length ? filtered : restaurants;
       const center = toShow.length ? [toShow[0].lat, toShow[0].lng] : [37.37, -122.03];
-      map = L.map('map-container', { minZoom: 1, maxZoom: 19 }).setView(center, 10);
+      map = L.map('map-container', { minZoom: 1, maxZoom: 19, zoomAnimation: false }).setView(center, 10);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map);
       setTimeout(function() { try { if (map) map.invalidateSize(); } catch(e) {} }, 400);
 
@@ -2580,7 +2582,6 @@
       });
 
       setTimeout(function() { loadPoiMarkers(); }, 600);
-      map.on('moveend', debounce(function() { if (map && state.tab === 'map') loadPoiMarkers(); }, 2000));
       const levelColors = { 0: '#7c4dff', 1: '#006CE0', 2: '#FF8D00', 3: '#e31919' };
       function buildMapPopup(r) {
         const color = levelColors[r.level] ?? levelColors[2];
