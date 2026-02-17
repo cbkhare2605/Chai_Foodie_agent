@@ -2472,26 +2472,31 @@
       return function() { clearTimeout(t); t = setTimeout(() => fn.apply(this, arguments), ms); };
     }
 
-    async function loadPoiMarkers() {
+    async function loadPoiMarkers(retryCount) {
       if (!map || typeof L === 'undefined') return;
       const mapRef = map;
       try {
         if (poiLayer) { try { mapRef.removeLayer(poiLayer); } catch (e) {} poiLayer = null; }
+        try { if (mapRef.invalidateSize) mapRef.invalidateSize(); } catch (e) {}
         const bounds = mapRef.getBounds();
         const s = bounds.getSouth(), w = bounds.getWest(), n = bounds.getNorth(), e = bounds.getEast();
         const reviewedKeys = new Set(getMapRestaurants().map(r => r.lat.toFixed(5) + ',' + r.lng.toFixed(5)));
         const query = '[out:json][timeout:15];(node["amenity"="restaurant"](' + s + ',' + w + ',' + n + ',' + e + ');node["amenity"="cafe"](' + s + ',' + w + ',' + n + ',' + e + ');node["amenity"="fast_food"](' + s + ',' + w + ',' + n + ',' + e + '););out body 200;';
+        const body = 'data=' + encodeURIComponent(query);
+        const endpoints = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.openstreetmap.fr/api/interpreter'];
         let data = null;
-        try {
-          const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
-          data = await res.json();
-        } catch (e1) {
+        for (const url of endpoints) {
           try {
-            const res2 = await fetch('https://overpass.kumi.systems/api/interpreter', { method: 'POST', body: query });
-            data = await res2.json();
-          } catch (e2) { throw e1; }
+            const res = await fetch(url, { method: 'POST', body: body, headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, mode: 'cors' });
+            if (!res.ok) continue;
+            data = await res.json();
+            if (data && data.elements) break;
+          } catch (err) { continue; }
         }
-        if (!data || !data.elements) return;
+        if (!data || !data.elements) {
+          if ((retryCount || 0) < 1) setTimeout(function() { loadPoiMarkers((retryCount || 0) + 1); }, 2500);
+          return;
+        }
         if (map !== mapRef || !mapRef.getContainer().parentNode) return;
         const pois = (data.elements || []).filter(el => el.lat && el.lon).map(el => ({
           name: el.tags?.name || el.tags?.['addr:street'] || 'Restaurant',
@@ -2512,7 +2517,9 @@
           poiLayer.addLayer(m);
         });
         if (map === mapRef && mapRef.getContainer().parentNode) mapRef.addLayer(poiLayer);
-      } catch (e) { /* Overpass may be rate-limited */ }
+      } catch (e) {
+        if ((retryCount || 0) < 1) setTimeout(function() { loadPoiMarkers((retryCount || 0) + 1); }, 2500);
+      }
     }
 
     window.addReviewFromMap = function(name, lat, lng) {
@@ -2654,7 +2661,7 @@
         setTab('add');
       });
 
-      setTimeout(function() { loadPoiMarkers(); }, 600);
+      setTimeout(function() { loadPoiMarkers(0); }, 900);
       const levelColors = { 0: '#7c4dff', 1: '#006CE0', 2: '#FF8D00', 3: '#e31919' };
       window._mapPopupRestaurants = toShow.map(r => ({ name: r.name || '', lat: r.lat, lng: r.lng }));
       function buildMapPopup(r, idx) {
