@@ -2392,14 +2392,25 @@
 
     async function loadPoiMarkers() {
       if (!map || typeof L === 'undefined') return;
+      const mapRef = map;
       try {
-        if (poiLayer) { map.removeLayer(poiLayer); poiLayer = null; }
-        const bounds = map.getBounds();
+        if (poiLayer) { try { mapRef.removeLayer(poiLayer); } catch (e) {} poiLayer = null; }
+        const bounds = mapRef.getBounds();
         const s = bounds.getSouth(), w = bounds.getWest(), n = bounds.getNorth(), e = bounds.getEast();
         const reviewedKeys = new Set(getMapRestaurants().map(r => r.lat.toFixed(5) + ',' + r.lng.toFixed(5)));
         const query = '[out:json][timeout:15];(node["amenity"="restaurant"](' + s + ',' + w + ',' + n + ',' + e + ');node["amenity"="cafe"](' + s + ',' + w + ',' + n + ',' + e + ');node["amenity"="fast_food"](' + s + ',' + w + ',' + n + ',' + e + '););out body 200;';
-        const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
-        const data = await res.json();
+        let data = null;
+        try {
+          const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
+          data = await res.json();
+        } catch (e1) {
+          try {
+            const res2 = await fetch('https://overpass.kumi.systems/api/interpreter', { method: 'POST', body: query });
+            data = await res2.json();
+          } catch (e2) { throw e1; }
+        }
+        if (!data || !data.elements) return;
+        if (map !== mapRef || !mapRef.getContainer().parentNode) return;
         const pois = (data.elements || []).filter(el => el.lat && el.lon).map(el => ({
           name: el.tags?.name || el.tags?.['addr:street'] || 'Restaurant',
           lat: el.lat,
@@ -2418,7 +2429,7 @@
           m.on('click', function() { window.addReviewFromMap(p.name, p.lat, p.lng); });
           poiLayer.addLayer(m);
         });
-        map.addLayer(poiLayer);
+        if (map === mapRef && mapRef.getContainer().parentNode) mapRef.addLayer(poiLayer);
       } catch (e) { /* Overpass may be rate-limited */ }
     }
 
@@ -2561,7 +2572,8 @@
         setTab('add');
       });
 
-      loadPoiMarkers();
+      setTimeout(function() { loadPoiMarkers(); }, 600);
+      map.on('moveend', debounce(function() { if (map && state.tab === 'map') loadPoiMarkers(); }, 2000));
       const levelColors = { 0: '#7c4dff', 1: '#006CE0', 2: '#FF8D00', 3: '#e31919' };
       function buildMapPopup(r) {
         const color = levelColors[r.level] ?? levelColors[2];
