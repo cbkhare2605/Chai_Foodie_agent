@@ -8,6 +8,12 @@
 
 ## Recent work (last few days)
 
+### 2025-02-12 — New user discovery and onboarding
+
+- **What:** New users can now discover others on Foodie without knowing usernames. (1) **People on Foodie** — Network tab shows users who have written reviews; connect with one tap. (2) **Empty-state onboarding** — When feed and connections are empty, a "Get started" card explains how to connect (People on Foodie, Invite friends, Search by name) and links to Network.
+- **Where:** `foodie-website/foodie-api.js` (`getSuggestedUsers`), `foodie-website/foodie.html` (Network panel, feed empty state).
+- **Decisions / notes:** Invite link already includes `?connect=DisplayName` so invitees land on Network with inviter pre-filled. Search (min 2 chars) remains for users who know a name.
+
 ### 2025-02-12 — Cache invalidation for all users
 
 - **What:** Cache-busting added so users get latest code on laptop and mobile. `config.js?v=4`, `foodie-api.js?v=4`, `sw.js?v=4`; service worker cache bumped to `foodie-v4`.

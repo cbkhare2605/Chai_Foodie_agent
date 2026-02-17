@@ -2523,10 +2523,23 @@
     }
 
     window.addReviewFromMap = function(name, lat, lng) {
-      state.selectedPlace = { name: name, lat: lat, lng: lng };
-      state.restaurantSearch = name;
+      if (!map) return;
+      window._pendingPoiAdd = { name: name || 'Restaurant', lat: lat, lng: lng };
+      const popup = L.popup().setLatLng([lat, lng]).setContent(
+        '<div style="padding:8px;min-width:200px"><p style="margin:0 0 12px 0;font-size:0.95rem">Add review for ' + escapeHtml(name || 'this place') + '?</p><div style="display:flex;gap:8px"><button onclick="window._confirmAddReviewFromPoi()" style="flex:1;padding:10px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600">Add review</button><button onclick="window._closeMapClickPopup()" style="flex:1;padding:10px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer">Cancel</button></div></div>'
+      ).openOn(map);
+      window._mapClickPopup = popup;
+    };
+    window._confirmAddReviewFromPoi = function() {
+      const p = window._pendingPoiAdd;
+      window._pendingPoiAdd = null;
+      if (window._mapClickPopup && map) { try { map.removeLayer(window._mapClickPopup); } catch(e) {} window._mapClickPopup = null; }
+      if (!p) return;
+      state.selectedPlace = { name: p.name, lat: p.lat, lng: p.lng };
+      state.restaurantSearch = p.name;
       state.searchResults = [];
       setTab('add');
+      render();
     };
 
     function login(name) { state.user = { displayName: name || 'Demo User' }; saveToStorage(); render(); }
@@ -2655,15 +2668,27 @@
         setTimeout(function() { try { if (map) map.invalidateSize(); } catch(e) {} }, 500);
       });
 
-      map.on('click', async function(e) {
+      map.on('click', function(e) {
         if (e.originalEvent.target.closest('.leaflet-marker-icon') || e.originalEvent.target.closest('.leaflet-popup')) return;
         const lat = e.latlng.lat, lng = e.latlng.lng;
+        const popup = L.popup().setLatLng(e.latlng).setContent(
+          '<div style="padding:8px;min-width:200px"><p style="margin:0 0 12px 0;font-size:0.95rem">Add a review at this location?</p><div style="display:flex;gap:8px"><button onclick="window._confirmAddReviewAtMapClick(' + lat + ',' + lng + ')" style="flex:1;padding:10px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600">Add review</button><button onclick="window._closeMapClickPopup()" style="flex:1;padding:10px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer">Cancel</button></div></div>'
+        ).openOn(map);
+        window._mapClickPopup = popup;
+      });
+      window._confirmAddReviewAtMapClick = async function(lat, lng) {
+        if (window._mapClickPopup && map) { try { map.removeLayer(window._mapClickPopup); } catch(e) {} window._mapClickPopup = null; }
         const name = await reverseGeocode(lat, lng);
         state.selectedPlace = { name: name, lat: lat, lng: lng };
         state.restaurantSearch = name;
         state.searchResults = [];
         setTab('add');
-      });
+        render();
+      };
+      window._closeMapClickPopup = function() {
+        window._pendingPoiAdd = null;
+        if (window._mapClickPopup && map) { try { map.removeLayer(window._mapClickPopup); } catch(e) {} window._mapClickPopup = null; }
+      };
 
       setTimeout(function() { loadPoiMarkers(0); }, 900);
       const levelColors = { 0: '#7c4dff', 1: '#006CE0', 2: '#FF8D00', 3: '#e31919' };
