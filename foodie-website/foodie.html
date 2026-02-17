@@ -915,23 +915,36 @@
     }
 
     function viewRestaurantDetail(restaurant, lat, lng) {
+      goToRestaurantOnMap(restaurant, lat, lng);
+    }
+    function viewRestaurantFromReviewId(reviewId) {
+      const r = state.reviews.find(x => x.id === reviewId);
+      if (!r) return;
+      goToRestaurantOnMap(r.restaurant, r.lat, r.lng);
+    }
+    function goToRestaurantOnMap(name, lat, lng) {
       const la = parseFloat(lat), ln = parseFloat(lng);
-      state.viewRestaurant = { name: restaurant, lat: la, lng: ln };
-      state.mapFocusRestaurant = { name: restaurant, lat: la, lng: ln };
+      if (isNaN(la) || isNaN(ln) || la < -90 || la > 90 || ln < -180 || ln > 180) return;
+      state.viewRestaurant = { name: name || '', lat: la, lng: ln };
+      state.mapFocusRestaurant = { name: name || '', lat: la, lng: ln };
       state.tab = 'map';
       state.panel = 'main';
       render();
-      setTimeout(initMap, 50);
+      setTimeout(initMap, 200);
     }
     function viewRestaurantReviews(restaurant, lat, lng) {
       const la = parseFloat(lat), ln = parseFloat(lng);
+      if (isNaN(la) || isNaN(ln)) return;
       state.viewRestaurant = { name: restaurant, lat: la, lng: ln };
       state.panel = 'restaurant';
       render();
     }
     function showRestaurantOnMap(name, lat, lng) {
-      state.mapFocusRestaurant = { name, lat: parseFloat(lat), lng: parseFloat(lng) };
-      setTab('map');
+      goToRestaurantOnMap(name, lat, lng);
+    }
+    function goToMapFromViewRestaurant() {
+      const vr = state.viewRestaurant;
+      if (vr) goToRestaurantOnMap(vr.name, vr.lat, vr.lng);
     }
     function openFixLocationModal(restaurantName, oldLat, oldLng) {
       state.fixLocationModal = { restaurantName, oldLat, oldLng, pinLat: oldLat, pinLng: oldLng };
@@ -1733,7 +1746,7 @@
                 ${isOwn ? `<button class="review-edit-btn" onclick="editReviewById('${r.id}')" title="Edit">✏️ Edit</button><button class="review-edit-btn" onclick="deleteReviewById('${r.id}')" title="Delete" style="color:#c62828">🗑️ Delete</button>` : ''}
               </div>
               <div class="review-date">${formatDate(r.date)}</div>
-              <div class="review-restaurant" onclick="viewRestaurantDetail('${escapeHtml(r.restaurant||'').replace(/'/g,"\\'")}', ${parseFloat(r.lat)}, ${parseFloat(r.lng)})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${escapeHtml(r.restaurant)}" title="${(()=>{const a=getAlsoReviewedBy(r); return a.length ? 'Also reviewed by '+a.join(', ') : ''})()}">${escapeHtml((r.restaurant||'').substring(0,60))}${(r.restaurant||'').length>60?'...':''}</div>
+              <div class="review-restaurant" onclick="viewRestaurantFromReviewId('${r.id}')" style="cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:rgba(0,0,0,0.1)" role="button" tabindex="0" aria-label="View ${escapeHtml(r.restaurant)} on map" title="${(()=>{const a=getAlsoReviewedBy(r); return a.length ? 'Also reviewed by '+a.join(', ')+' • Tap to view on map' : 'Tap to view on map'})()}">${escapeHtml((r.restaurant||'').substring(0,60))}${(r.restaurant||'').length>60?'...':''}</div>
               ${getReviewAlsoReviewedHtml(r, mutualCount, networkScore)}
               ${(r.cuisine||r.price) ? `<div style="font-size:0.75rem;color:#666;margin-top:2px">${escapeHtml(r.cuisine||'')} ${PRICE_LABELS[(r.price||2)-1]||''}</div>` : ''}
             </div>
@@ -1747,7 +1760,7 @@
             <button class="review-action-btn ${r.liked?'liked':''}" onclick="toggleLike('${r.id}')" aria-label="Like" title="${((r.likedBy||[]).length) ? 'Liked by ' + (r.likedBy||[]).slice(0,3).join(', ') + ((r.likedBy||[]).length>3 ? ' and ' + ((r.likedBy||[]).length-3) + ' more' : '') : 'Like'}">${r.liked?'❤️':'🤍'} Like</button>
             <button class="review-action-btn" onclick="document.getElementById('commentInput${r.id}')?.focus()" aria-label="Comment">💬 Comment ${comments.length?`(${comments.length})`:''}</button>
             <button class="review-action-btn" onclick="shareReview('${r.id}')" aria-label="Share">↗️ Share</button>
-            <button class="review-action-btn" onclick="showRestaurantOnMap('${escapeHtml(r.restaurant||'').replace(/'/g,"\\'")}', ${parseFloat(r.lat)}, ${parseFloat(r.lng)})" aria-label="View on map">📍 Map</button>
+            <button class="review-action-btn" onclick="viewRestaurantFromReviewId('${r.id}')" aria-label="View on map">📍 Map</button>
             ${isOwn && Math.abs(r.lat - 37.37) < 0.1 && Math.abs(r.lng - (-122.03)) < 0.1 ? `<button class="review-action-btn" onclick="fixLocationForRestaurant('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="font-size:0.85rem" title="Location looks wrong">🔧 Fix location</button>` : ''}
             <button class="review-action-btn" onclick="toggleSaveById('${r.id}')" aria-label="Save">${saved?'🔖':'📑'} ${saved?'Saved':'Save'}</button>
             ${isOwn ? `<button class="review-action-btn" onclick="editReviewById('${r.id}')">✏️ Edit</button><button class="review-action-btn" onclick="deleteReviewById('${r.id}')" style="color:#c62828" aria-label="Delete">🗑️ Delete</button>` : ''}
@@ -2110,7 +2123,7 @@
             </div>
             <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;align-items:center">
               <a href="https://www.google.com/maps?q=${vr.lat},${vr.lng}" target="_blank" rel="noopener" style="color:#0a66c2;font-size:0.9rem">📍 Get directions</a>
-              <button onclick="showRestaurantOnMap('${(vr.name||'').replace(/'/g,"\\'")}', ${vr.lat}, ${vr.lng})" style="padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">📍 View on map</button>
+              <button onclick="goToMapFromViewRestaurant()" style="padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">📍 View on map</button>
               ${(looksWrong || hasOwnReview) ? `<button onclick="openFixLocationModal('${(vr.name||'').replace(/'/g,"\\'")}', ${vr.lat}, ${vr.lng})" style="padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">🔧 Fix location</button>` : ''}
             </div>
           </div>
@@ -2583,7 +2596,8 @@
 
       setTimeout(function() { loadPoiMarkers(); }, 600);
       const levelColors = { 0: '#7c4dff', 1: '#006CE0', 2: '#FF8D00', 3: '#e31919' };
-      function buildMapPopup(r) {
+      window._mapPopupRestaurants = toShow.map(r => ({ name: r.name || '', lat: r.lat, lng: r.lng }));
+      function buildMapPopup(r, idx) {
         const color = levelColors[r.level] ?? levelColors[2];
         const levelLabel = r.level === 0 ? 'Discover' : r.level === 1 ? '1st level' : r.level === 2 ? '2nd level' : 'Your review';
         const firstPhoto = (r.reviews || []).flatMap(rev => getReviewPhotoUrls(rev)).find(Boolean);
@@ -2597,14 +2611,22 @@
           '<span style="font-size:0.85rem;color:#666">' + cuisineStr + ' · ' + priceStr + '</span><br>' +
           '<span style="font-size:0.85rem">' + (r.avgRating !== '-' ? r.avgRating + ' ★' : '-') + ' · ' + (r.reviews?.length||0) + ' review' + ((r.reviews?.length||0)===1?'':'s') + '</span><br>' +
           '<a href="' + dirUrl + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#0a66c2;color:white;border-radius:6px;text-decoration:none;font-size:0.9rem">Get directions</a> ' +
-          '<button onclick="window.viewRestaurantReviews(\'' + (r.name||'').replace(/'/g,"\\'") + '\', ' + r.lat + ', ' + r.lng + ')" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">View details</button> ' +
-          '<button onclick="window.openFixLocationModal(\'' + (r.name||'').replace(/'/g,"\\'") + '\', ' + r.lat + ', ' + r.lng + ')" style="margin-top:8px;padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Fix location</button>' +
+          '<button onclick="window._viewRestaurantFromMapIdx(' + idx + ')" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">View details</button> ' +
+          '<button onclick="window._openFixLocationFromMapIdx(' + idx + ')" style="margin-top:8px;padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Fix location</button>' +
           '</div>';
       }
+      window._viewRestaurantFromMapIdx = function(idx) {
+        const arr = window._mapPopupRestaurants;
+        if (arr && arr[idx]) { const x = arr[idx]; viewRestaurantReviews(x.name, x.lat, x.lng); }
+      };
+      window._openFixLocationFromMapIdx = function(idx) {
+        const arr = window._mapPopupRestaurants;
+        if (arr && arr[idx]) { const x = arr[idx]; openFixLocationModal(x.name, x.lat, x.lng); }
+      };
       if (typeof L !== 'undefined' && L.markerClusterGroup) {
         if (markerCluster) map.removeLayer(markerCluster);
         markerCluster = L.markerClusterGroup();
-        toShow.forEach(r => {
+        toShow.forEach((r, idx) => {
           const color = levelColors[r.level] || levelColors[2];
           const size = getMapBubbleSize(r.avgRating, r.reviews?.length || 0);
           const icon = L.divIcon({
@@ -2613,13 +2635,13 @@
             iconSize: [size, size],
             iconAnchor: [size/2, size/2]
           });
-          const m = L.marker([r.lat, r.lng], { icon }).bindPopup(buildMapPopup(r));
+          const m = L.marker([r.lat, r.lng], { icon }).bindPopup(buildMapPopup(r, idx));
           markerCluster.addLayer(m);
           markers.push(m);
         });
         map.addLayer(markerCluster);
       } else {
-        toShow.forEach(r => {
+        toShow.forEach((r, idx) => {
           const color = levelColors[r.level] || levelColors[2];
           const size = getMapBubbleSize(r.avgRating, r.reviews?.length || 0);
           const icon = L.divIcon({
@@ -2628,7 +2650,7 @@
             iconSize: [size, size],
             iconAnchor: [size/2, size/2]
           });
-          const m = L.marker([r.lat, r.lng], { icon }).addTo(map).bindPopup(buildMapPopup(r));
+          const m = L.marker([r.lat, r.lng], { icon }).addTo(map).bindPopup(buildMapPopup(r, idx));
           markers.push(m);
         });
       }
@@ -2656,7 +2678,8 @@
         if (m) setTimeout(function(){ m.openPopup(); }, 300);
         else {
           const dirUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + f.lat + ',' + f.lng;
-          L.popup().setLatLng([f.lat, f.lng]).setContent('<div class="map-popup" style="min-width:180px"><strong>' + escapeHtml(f.name||'') + '</strong><br><a href="' + dirUrl + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#0a66c2;color:white;border-radius:6px;text-decoration:none;font-size:0.9rem">Get directions</a> <button onclick="window.viewRestaurantReviews(\'' + (f.name||'').replace(/'/g,"\\'") + '\', ' + f.lat + ', ' + f.lng + ')" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">View details</button> <button onclick="window.openFixLocationModal(\'' + (f.name||'').replace(/'/g,"\\'") + '\', ' + f.lat + ', ' + f.lng + ')" style="margin-top:8px;padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Fix location</button></div>').openOn(map);
+          window._mapPopupRestaurants = [{ name: f.name || '', lat: f.lat, lng: f.lng }];
+          L.popup().setLatLng([f.lat, f.lng]).setContent('<div class="map-popup" style="min-width:180px"><strong>' + escapeHtml(f.name||'') + '</strong><br><a href="' + dirUrl + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#0a66c2;color:white;border-radius:6px;text-decoration:none;font-size:0.9rem">Get directions</a> <button onclick="window._viewRestaurantFromMapIdx(0)" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">View details</button> <button onclick="window._openFixLocationFromMapIdx(0)" style="margin-top:8px;padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Fix location</button></div>').openOn(map);
         }
         state.mapFocusRestaurant = null;
       }
@@ -2698,6 +2721,7 @@
     }
 
     window.viewRestaurantDetail = viewRestaurantDetail;
+    window.viewRestaurantFromReviewId = viewRestaurantFromReviewId;
     window.viewRestaurantReviews = viewRestaurantReviews;
     window.showRestaurantOnMap = showRestaurantOnMap;
     window.openFixLocationModal = openFixLocationModal;
