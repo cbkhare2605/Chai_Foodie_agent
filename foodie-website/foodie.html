@@ -399,6 +399,7 @@
       addWouldGoAgain: true,
       savedListFilter: 'Saved',
       mapFocusRestaurant: null,
+      pickOnMapRestaurantName: null,
       pendingConnect: null,
       groups: [],
       pendingGroups: [],
@@ -621,7 +622,7 @@
 
     function searchRestaurants(q) {
       state.restaurantSearch = q;
-      if (q.length < 2) { state.searchResults = []; updateAddReviewSearchResults(); return; }
+      if (q.length < 2) { state.searchResults = []; state.searchResultsFromCity = false; updateAddReviewSearchResults(); return; }
       clearTimeout(searchTimer);
       searchTimer = setTimeout(async () => {
         const loc = state.userLocation || { lat: 37.37, lng: -122.03 };
@@ -632,10 +633,33 @@
             const data = await nominatimSearch(q);
             if (data?.length) results = data.map(p => ({ name: p.display_name, lat: parseFloat(p.lat), lng: parseFloat(p.lon) }));
           }
-          if (!results.length) results = [{ name: q, lat: loc.lat, lng: loc.lng }];
+          if (!results.length) {
+            const parts = q.split(',').map(p => p.trim()).filter(Boolean);
+            const cityPart = parts.length >= 2 ? parts.slice(-2).join(', ') : (parts.length ? parts[0] : '');
+            if (cityPart.length >= 3) {
+              const cityResults = await photonSearch(cityPart, loc.lat, loc.lng);
+              if (cityResults.length) {
+                results = [{ name: q, lat: cityResults[0].lat, lng: cityResults[0].lng }];
+                state.searchResultsFromCity = true;
+              }
+            }
+            if (!results.length) {
+              const alt = q.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+              if (alt !== q) results = await photonSearch(alt, loc.lat, loc.lng);
+              if (!results.length && alt !== q) {
+                const data = await nominatimSearch(alt);
+                if (data?.length) results = data.map(p => ({ name: p.display_name, lat: parseFloat(p.lat), lng: parseFloat(p.lon) }));
+              }
+            }
+            if (!results.length) {
+              results = [{ name: q, lat: loc.lat, lng: loc.lng }];
+              state.searchResultsFromCity = false;
+            }
+          } else state.searchResultsFromCity = false;
           state.searchResults = results.slice(0, 8);
         } catch (e) {
           state.searchResults = [{ name: q, lat: loc.lat, lng: loc.lng }];
+          state.searchResultsFromCity = false;
         }
         updateAddReviewSearchResults();
       }, 400);
@@ -1306,6 +1330,7 @@
     function cancelEdit() { discardReview(); }
     function discardReview() {
       state.editingReview = null;
+      state.pickOnMapRestaurantName = null;
       state.rating = 0;
       state.reviewText = '';
       state.restaurantSearch = '';
@@ -2289,7 +2314,8 @@
                 ${state.restaurantSearch.trim() && state.searchResults.length ? `<div class="search-result-item" style="font-weight:600;color:#0a66c2" onclick="useTypedNameAsPlace()">✓ Use &quot;${escapeHtml(state.restaurantSearch.trim().slice(0,40))}${state.restaurantSearch.trim().length>40?'...':''}&quot; as entered</div>` : ''}
                 ${state.searchResults.map((p, i) => `
                 <div class="search-result-item" onclick="selectPlaceByIndex(${i})">${escapeHtml(p.name)}</div>
-              `).join('')}</div>
+              `).join('')}
+                ${state.restaurantSearch.trim() ? `<div class="search-result-item" style="color:#0a66c2;border-top:1px solid #eee;margin-top:4px;padding-top:8px" onclick="state.pickOnMapRestaurantName=document.getElementById('addReviewRestaurantInput')?.value?.trim()||state.restaurantSearch?.trim()||''; setTab('map'); render()">📍 Can&apos;t find it? Pin on map</div>` : ''}</div>
             </div>
             <p style="font-size:0.85rem;color:#666;margin:-8px 0 0 0">Type a name or pick from suggestions. Either works.</p>
             <div class="add-review-rating">
@@ -2335,6 +2361,7 @@
         const l2 = state.reviews.filter(r=>getEffectiveLevel(r)===2).length;
         mainContent = `
           <div class="main">
+            ${state.pickOnMapRestaurantName ? `<div style="background:#e3f2fd;padding:12px 16px;border-radius:8px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><span style="font-size:0.95rem">📍 Tap on the map where <strong>${escapeHtml(state.pickOnMapRestaurantName.slice(0,50))}${state.pickOnMapRestaurantName.length>50?'...':''}</strong> is located</span><button onclick="state.pickOnMapRestaurantName=null; render()" style="padding:6px 12px;background:#666;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Cancel</button></div>` : ''}
             <div class="map-search" style="display:flex;gap:8px">
               <input type="text" id="mapSearchInput" placeholder="Search restaurant or place (Enter to go to location)" value="${(state.mapSearch||'').replace(/"/g,'&quot;')}" oninput="updateMapSearch()" onkeydown="if(event.key==='Enter'){event.preventDefault();geocodeMapSearch()}">
               <button onclick="geocodeMapSearch()" style="padding:10px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;white-space:nowrap">Go</button>
@@ -2691,7 +2718,9 @@
       });
       window._confirmAddReviewAtMapClick = async function(lat, lng) {
         if (window._mapClickPopup && map) { try { map.removeLayer(window._mapClickPopup); } catch(e) {} window._mapClickPopup = null; }
-        const name = await reverseGeocode(lat, lng);
+        const useName = state.pickOnMapRestaurantName || '';
+        state.pickOnMapRestaurantName = null;
+        const name = useName || (await reverseGeocode(lat, lng));
         state.selectedPlace = { name: name, lat: lat, lng: lng };
         state.restaurantSearch = name;
         state.searchResults = [];
