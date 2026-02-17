@@ -913,20 +913,22 @@
     }
 
     function viewRestaurantDetail(restaurant, lat, lng) {
-      state.viewRestaurant = { name: restaurant, lat, lng };
-      state.mapFocusRestaurant = { name: restaurant, lat, lng };
+      const la = parseFloat(lat), ln = parseFloat(lng);
+      state.viewRestaurant = { name: restaurant, lat: la, lng: ln };
+      state.mapFocusRestaurant = { name: restaurant, lat: la, lng: ln };
       state.tab = 'map';
       state.panel = 'main';
       render();
       setTimeout(initMap, 50);
     }
     function viewRestaurantReviews(restaurant, lat, lng) {
-      state.viewRestaurant = { name: restaurant, lat, lng };
+      const la = parseFloat(lat), ln = parseFloat(lng);
+      state.viewRestaurant = { name: restaurant, lat: la, lng: ln };
       state.panel = 'restaurant';
       render();
     }
     function showRestaurantOnMap(name, lat, lng) {
-      state.mapFocusRestaurant = { name, lat, lng };
+      state.mapFocusRestaurant = { name, lat: parseFloat(lat), lng: parseFloat(lng) };
       setTab('map');
     }
     function openFixLocationModal(restaurantName, oldLat, oldLng) {
@@ -1575,8 +1577,8 @@
       state.reviews.unshift({
         id: Date.now().toString(),
         restaurant: restName,
-        lat: place.lat,
-        lng: place.lng,
+        lat: parseFloat(place.lat),
+        lng: parseFloat(place.lng),
         by: state.user.displayName,
         text: text.trim(),
         rating: state.rating,
@@ -1599,7 +1601,10 @@
       state.addCuisine = ''; state.addPrice = 2; state.addPhotos = []; state.addVerifiedVisit = false; state.addWouldGoAgain = true;
       const newReview = state.reviews[0];
       if (window.FOODIE_API?.enabled) {
-        try { await window.FOODIE_API.saveReview(newReview); } catch (e) {
+        try {
+          await window.FOODIE_API.saveReview(newReview);
+          await refreshFeed();
+        } catch (e) {
           state.reviews.shift();
           alert('Could not save review: ' + (e.message || 'Please check your connection and try again.'));
           render(); return;
@@ -1618,10 +1623,11 @@
       if (minR > 0) list = list.filter(r => (r.rating||0) >= minR);
       const byLocation = {};
       list.forEach(r => {
-        const k = r.lat + ',' + r.lng;
+        const lat = parseFloat(r.lat), lng = parseFloat(r.lng);
+        const k = lat.toFixed(5) + ',' + lng.toFixed(5);
         const lvl = getEffectiveLevel(r);
         if (!byLocation[k]) {
-          byLocation[k] = { name: r.restaurant, lat: r.lat, lng: r.lng, level: lvl, reviews: [], cuisines: new Set(), prices: [] };
+          byLocation[k] = { name: r.restaurant, lat: lat, lng: lng, level: lvl, reviews: [], cuisines: new Set(), prices: [] };
         }
         const loc = byLocation[k];
         if (lvl === 0) {
@@ -1725,7 +1731,7 @@
                 ${isOwn ? `<button class="review-edit-btn" onclick="editReviewById('${r.id}')" title="Edit">✏️ Edit</button><button class="review-edit-btn" onclick="deleteReviewById('${r.id}')" title="Delete" style="color:#c62828">🗑️ Delete</button>` : ''}
               </div>
               <div class="review-date">${formatDate(r.date)}</div>
-              <div class="review-restaurant" onclick="viewRestaurantDetail('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${escapeHtml(r.restaurant)}" title="${(()=>{const a=getAlsoReviewedBy(r); return a.length ? 'Also reviewed by '+a.join(', ') : ''})()}">${escapeHtml((r.restaurant||'').substring(0,60))}${(r.restaurant||'').length>60?'...':''}</div>
+              <div class="review-restaurant" onclick="viewRestaurantDetail('${escapeHtml(r.restaurant||'').replace(/'/g,"\\'")}', ${parseFloat(r.lat)}, ${parseFloat(r.lng)})" style="cursor:pointer" role="button" tabindex="0" aria-label="View ${escapeHtml(r.restaurant)}" title="${(()=>{const a=getAlsoReviewedBy(r); return a.length ? 'Also reviewed by '+a.join(', ') : ''})()}">${escapeHtml((r.restaurant||'').substring(0,60))}${(r.restaurant||'').length>60?'...':''}</div>
               ${getReviewAlsoReviewedHtml(r, mutualCount, networkScore)}
               ${(r.cuisine||r.price) ? `<div style="font-size:0.75rem;color:#666;margin-top:2px">${escapeHtml(r.cuisine||'')} ${PRICE_LABELS[(r.price||2)-1]||''}</div>` : ''}
             </div>
@@ -1739,7 +1745,7 @@
             <button class="review-action-btn ${r.liked?'liked':''}" onclick="toggleLike('${r.id}')" aria-label="Like" title="${((r.likedBy||[]).length) ? 'Liked by ' + (r.likedBy||[]).slice(0,3).join(', ') + ((r.likedBy||[]).length>3 ? ' and ' + ((r.likedBy||[]).length-3) + ' more' : '') : 'Like'}">${r.liked?'❤️':'🤍'} Like</button>
             <button class="review-action-btn" onclick="document.getElementById('commentInput${r.id}')?.focus()" aria-label="Comment">💬 Comment ${comments.length?`(${comments.length})`:''}</button>
             <button class="review-action-btn" onclick="shareReview('${r.id}')" aria-label="Share">↗️ Share</button>
-            <button class="review-action-btn" onclick="showRestaurantOnMap('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" aria-label="View on map">📍 Map</button>
+            <button class="review-action-btn" onclick="showRestaurantOnMap('${escapeHtml(r.restaurant||'').replace(/'/g,"\\'")}', ${parseFloat(r.lat)}, ${parseFloat(r.lng)})" aria-label="View on map">📍 Map</button>
             ${isOwn && Math.abs(r.lat - 37.37) < 0.1 && Math.abs(r.lng - (-122.03)) < 0.1 ? `<button class="review-action-btn" onclick="fixLocationForRestaurant('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="font-size:0.85rem" title="Location looks wrong">🔧 Fix location</button>` : ''}
             <button class="review-action-btn" onclick="toggleSaveById('${r.id}')" aria-label="Save">${saved?'🔖':'📑'} ${saved?'Saved':'Save'}</button>
             ${isOwn ? `<button class="review-action-btn" onclick="editReviewById('${r.id}')">✏️ Edit</button><button class="review-action-btn" onclick="deleteReviewById('${r.id}')" style="color:#c62828" aria-label="Delete">🗑️ Delete</button>` : ''}
@@ -2086,7 +2092,8 @@
         </div>`;
       } else if (state.panel === 'restaurant' && state.viewRestaurant) {
         const vr = state.viewRestaurant;
-        const restReviews = state.reviews.filter(r => Math.abs(r.lat - vr.lat) < 0.01 && Math.abs(r.lng - vr.lng) < 0.01);
+        const vrLat = parseFloat(vr.lat), vrLng = parseFloat(vr.lng);
+        const restReviews = state.reviews.filter(r => Math.abs(parseFloat(r.lat) - vrLat) < 0.001 && Math.abs(parseFloat(r.lng) - vrLng) < 0.001);
         const networkScore = getRestaurantNetworkScore(vr.lat, vr.lng);
         const cuisines = [...new Set(restReviews.map(r=>r.cuisine||'Various'))];
         const looksWrong = Math.abs(vr.lat - 37.37) < 0.1 && Math.abs(vr.lng - (-122.03)) < 0.1;
