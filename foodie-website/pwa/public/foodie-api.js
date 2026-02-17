@@ -420,6 +420,17 @@
     await supabase.from('profiles').update({ display_name: displayName, bio: bio || null, avatar_url: avatarUrl || null, updated_at: new Date().toISOString() }).eq('id', user.id);
   }
 
+  async function uploadAvatar(file) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !file) return null;
+    const ext = (file.name || '').split('.').pop() || 'jpg';
+    const path = user.id + '/avatar.' + ext;
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+    if (error) throw error;
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+    return data?.publicUrl || null;
+  }
+
   async function resetPasswordForEmail(email) {
     const redirectTo = typeof location !== 'undefined' ? (location.origin + location.pathname).replace(/\/index\.html$/i, '/') : '';
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
@@ -455,6 +466,7 @@
     setPrivateNote,
     toggleList,
     updateProfile,
+    uploadAvatar,
     resetPasswordForEmail,
     updateUserPassword,
     createGroup,

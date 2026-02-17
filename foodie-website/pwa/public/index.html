@@ -640,6 +640,15 @@
       if (data?.length) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
       return null;
     }
+    async function reverseGeocode(lat, lng) {
+      try {
+        const url = 'https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json';
+        const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'FoodieApp/1.0 (https://github.com/foodie-app; contact@foodie.app)' } });
+        const data = await res.json();
+        return data?.display_name || data?.name || 'Add location';
+      } catch (e) { return 'Add location'; }
+    }
+
     async function geocodePlace(query, biasLat, biasLon) {
       try {
         let loc = (biasLat != null && biasLon != null) ? { lat: biasLat, lng: biasLon } : (state.userLocation || null);
@@ -1298,22 +1307,52 @@
       render();
     }
 
-    function handleProfilePhoto(input) {
+    async function handleProfilePhoto(input) {
       const f = input?.files?.[0];
       if (!f) return;
       if (!ALLOWED_IMAGE_TYPES.includes(f.type) || f.type === 'image/svg+xml') return;
-      const r = new FileReader();
-      r.onload = function() {
-        const d = r.result;
-        processImageToSafeDataUrl(d, 100000, 500, function(safeUrl) {
-          if (safeUrl) {
-            const uid = state.user?.displayName;
-            if (uid) { if (!state.profiles[uid]) state.profiles[uid] = {}; state.profiles[uid].avatar = safeUrl; saveToStorage(); render(); }
+      const uid = state.user?.displayName;
+      if (!uid) return;
+      if (!state.profiles[uid]) state.profiles[uid] = {};
+      if (window.FOODIE_API?.enabled && window.FOODIE_API.uploadAvatar) {
+        try {
+          const url = await window.FOODIE_API.uploadAvatar(f);
+          if (url) {
+            state.profiles[uid].avatar = url;
+            await window.FOODIE_API.updateProfile(uid, state.profiles[uid].bio || '', url);
+            render();
           }
-        });
-      };
-      r.readAsDataURL(f);
+        } catch (e) {
+          console.warn('Avatar upload failed, using local:', e);
+          const r = new FileReader();
+          r.onload = function() {
+            processImageToSafeDataUrl(r.result, 100000, 500, function(safeUrl) {
+              if (safeUrl) { state.profiles[uid].avatar = safeUrl; saveToStorage(); render(); }
+            });
+          };
+          r.readAsDataURL(f);
+        }
+      } else {
+        const r = new FileReader();
+        r.onload = function() {
+          processImageToSafeDataUrl(r.result, 100000, 500, function(safeUrl) {
+            if (safeUrl) { state.profiles[uid].avatar = safeUrl; saveToStorage(); render(); }
+          });
+        };
+        r.readAsDataURL(f);
+      }
       input.value = '';
+    }
+
+    async function deleteProfilePhoto() {
+      const uid = state.user?.displayName;
+      if (!uid) return;
+      if (!state.profiles[uid]) state.profiles[uid] = {};
+      state.profiles[uid].avatar = '';
+      if (window.FOODIE_API?.enabled) {
+        try { await window.FOODIE_API.updateProfile(uid, state.profiles[uid].bio || '', null); } catch (e) { console.warn(e); }
+      } else saveToStorage();
+      render();
     }
 
     let nsfwModelPromise = null;
@@ -1919,6 +1958,7 @@
               <input type="file" accept="image/*" onchange="handleProfilePhoto(this)" style="display:none">
               <div style="font-size:0.8rem;color:#666;margin-top:4px">Tap to change photo</div>
             </label>
+            ${getSafeAvatarUrl(prof) ? `<button type="button" onclick="deleteProfilePhoto()" style="display:block;margin:8px auto 0;padding:6px 12px;background:#666;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.85rem">Remove photo</button>` : ''}
           </div>
           <input type="text" placeholder="Name" value="${(uid||'').replace(/"/g,'&quot;')}" id="profileName" maxlength="${MAX_DISPLAY_NAME}" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px">
           <textarea placeholder="Bio (optional)" id="profileBio" style="width:100%;padding:12px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px;min-height:80px;resize:vertical">${(prof.bio||'').replace(/</g,'&lt;')}</textarea>
@@ -2223,6 +2263,7 @@
                 <option value="5" ${state.mapMinRating==5?'selected':''}>5 stars only</option>
               </select>
             </div>
+            <p style="font-size:0.85rem;color:#666;margin-bottom:8px">Click anywhere on the map or on a gray dot to add a review for that location.</p>
             <div style="position:relative">
               <div id="map-container"></div>
               <div class="map-controls" id="mapControls">
@@ -2232,6 +2273,7 @@
             <div class="map-legend">
               <span><span class="map-legend-dot" style="background:#006CE0"></span> 1st level</span>
               <span><span class="map-legend-dot" style="background:#FF8D00"></span> 2nd level</span>
+              <span><span class="map-legend-dot" style="background:#888"></span> Nearby (click to add review)</span>
               <span><span class="map-legend-dot" style="background:#e31919"></span> Your review</span>
             </div>
           </div>
@@ -2338,7 +2380,52 @@
     let map = null;
     let markers = [];
     let markerCluster = null;
+    let poiLayer = null;
     let userLocationMarker = null;
+
+    function debounce(fn, ms) {
+      let t = null;
+      return function() { clearTimeout(t); t = setTimeout(() => fn.apply(this, arguments), ms); };
+    }
+
+    async function loadPoiMarkers() {
+      if (!map || typeof L === 'undefined') return;
+      try {
+        if (poiLayer) { map.removeLayer(poiLayer); poiLayer = null; }
+        const bounds = map.getBounds();
+        const s = bounds.getSouth(), w = bounds.getWest(), n = bounds.getNorth(), e = bounds.getEast();
+        const reviewedKeys = new Set(getMapRestaurants().map(r => r.lat.toFixed(5) + ',' + r.lng.toFixed(5)));
+        const query = '[out:json][timeout:15];(node["amenity"="restaurant"](' + s + ',' + w + ',' + n + ',' + e + ');node["amenity"="cafe"](' + s + ',' + w + ',' + n + ',' + e + ');node["amenity"="fast_food"](' + s + ',' + w + ',' + n + ',' + e + '););out body 200;';
+        const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
+        const data = await res.json();
+        const pois = (data.elements || []).filter(el => el.lat && el.lon).map(el => ({
+          name: el.tags?.name || el.tags?.['addr:street'] || 'Restaurant',
+          lat: el.lat,
+          lng: el.lon
+        })).filter(p => !reviewedKeys.has(p.lat.toFixed(5) + ',' + p.lng.toFixed(5)));
+        poiLayer = L.layerGroup();
+        pois.slice(0, 150).forEach(p => {
+          const icon = L.divIcon({
+            className: 'map-marker poi-marker',
+            html: '<div style="background:#888;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>',
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+          });
+          const m = L.marker([p.lat, p.lng], { icon }).bindPopup(
+            '<div class="map-popup" style="min-width:140px"><strong>' + escapeHtml(p.name) + '</strong><br><button onclick="window.addReviewFromMap(' + JSON.stringify(p.name) + ',' + p.lat + ',' + p.lng + ')" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Add review</button></div>'
+          );
+          poiLayer.addLayer(m);
+        });
+        map.addLayer(poiLayer);
+      } catch (e) { /* Overpass may be rate-limited */ }
+    }
+
+    window.addReviewFromMap = function(name, lat, lng) {
+      state.selectedPlace = { name: name, lat: lat, lng: lng };
+      state.restaurantSearch = name;
+      state.searchResults = [];
+      setTab('add');
+    };
 
     function login(name) { state.user = { displayName: name || 'Demo User' }; saveToStorage(); render(); }
     async function handleSupabaseSignUp() {
@@ -2452,7 +2539,7 @@
       if (!el) return;
       if (typeof L === 'undefined') { setTimeout(initMap, 100); return; }
       try { if (map) map.remove(); } catch (e) {}
-      map = null; markers = []; userLocationMarker = null;
+      map = null; markers = []; markerCluster = null; poiLayer = null; userLocationMarker = null;
       const restaurants = getMapRestaurants();
       const q = (state.mapSearch || '').toLowerCase().trim();
       const filtered = q ? restaurants.filter(r => (r.name||'').toLowerCase().includes(q)) : restaurants;
@@ -2461,6 +2548,19 @@
       map = L.map('map-container', { minZoom: 1, maxZoom: 19 }).setView(center, 10);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map);
       setTimeout(function() { try { if (map) map.invalidateSize(); } catch(e) {} }, 400);
+
+      map.on('click', async function(e) {
+        if (e.originalEvent.target.closest('.leaflet-marker-icon') || e.originalEvent.target.closest('.leaflet-popup')) return;
+        const lat = e.latlng.lat, lng = e.latlng.lng;
+        const name = await reverseGeocode(lat, lng);
+        state.selectedPlace = { name: name, lat: lat, lng: lng };
+        state.restaurantSearch = name;
+        state.searchResults = [];
+        setTab('add');
+      });
+
+      loadPoiMarkers();
+      map.on('moveend', debounce(loadPoiMarkers, 800));
       const levelColors = { 0: '#7c4dff', 1: '#006CE0', 2: '#FF8D00', 3: '#e31919' };
       function buildMapPopup(r) {
         const color = levelColors[r.level] ?? levelColors[2];
