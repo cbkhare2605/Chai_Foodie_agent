@@ -151,6 +151,7 @@
     #map-container { height: 600px; min-height: 500px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; box-sizing: border-box; }
     #fix-location-map { height: 300px; min-height: 300px; width: 100%; border-radius: 12px; overflow: hidden; }
     .map-marker.leaflet-marker-icon { background: none !important; border: none !important; }
+    .poi-tooltip { font-size: 0.85rem; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
     .map-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem; color: #666; flex-wrap: wrap; }
     .map-controls { position: absolute; top: 12px; right: 12px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
     .map-control-btn { width: 40px; height: 40px; border-radius: 50%; background: white; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; }
@@ -2263,11 +2264,12 @@
                 <option value="5" ${state.mapMinRating==5?'selected':''}>5 stars only</option>
               </select>
             </div>
-            <p style="font-size:0.85rem;color:#666;margin-bottom:8px">Click anywhere on the map or on a gray dot to add a review for that location.</p>
+            <p style="font-size:0.85rem;color:#666;margin-bottom:8px">Hover gray dots for name. Click a dot or anywhere on the map to add a review.</p>
             <div style="position:relative">
               <div id="map-container"></div>
               <div class="map-controls" id="mapControls">
                 <button class="map-control-btn" onclick="myLocationMap()" title="My location">📍</button>
+                <button class="map-control-btn" onclick="loadPoiMarkers()" title="Refresh nearby restaurants">🔄</button>
               </div>
             </div>
             <div class="map-legend">
@@ -2407,13 +2409,13 @@
         pois.slice(0, 150).forEach(p => {
           const icon = L.divIcon({
             className: 'map-marker poi-marker',
-            html: '<div style="background:#888;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>',
+            html: '<div style="background:#888;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3)" title="' + escapeHtml(p.name) + '"></div>',
             iconSize: [12, 12],
             iconAnchor: [6, 6]
           });
-          const m = L.marker([p.lat, p.lng], { icon }).bindPopup(
-            '<div class="map-popup" style="min-width:140px"><strong>' + escapeHtml(p.name) + '</strong><br><button onclick="window.addReviewFromMap(' + JSON.stringify(p.name) + ',' + p.lat + ',' + p.lng + ')" style="margin-top:8px;padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">Add review</button></div>'
-          );
+          const m = L.marker([p.lat, p.lng], { icon });
+          m.bindTooltip(escapeHtml(p.name), { permanent: false, direction: 'top', className: 'poi-tooltip' });
+          m.on('click', function() { window.addReviewFromMap(p.name, p.lat, p.lng); });
           poiLayer.addLayer(m);
         });
         map.addLayer(poiLayer);
@@ -2560,7 +2562,6 @@
       });
 
       loadPoiMarkers();
-      map.on('moveend', debounce(loadPoiMarkers, 800));
       const levelColors = { 0: '#7c4dff', 1: '#006CE0', 2: '#FF8D00', 3: '#e31919' };
       function buildMapPopup(r) {
         const color = levelColors[r.level] ?? levelColors[2];
