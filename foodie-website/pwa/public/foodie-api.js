@@ -60,6 +60,7 @@
     const retentionMs = RETENTION_WEEKS * 7 * 24 * 60 * 60 * 1000;
     const visibleReviews = (reviewsRes.data || []).filter(r => {
       if (!r.deleted_at) return true;
+      if (r.user_id === user.id) return false;
       return Date.now() - new Date(r.deleted_at).getTime() < retentionMs;
     });
     const likesByReview = {};

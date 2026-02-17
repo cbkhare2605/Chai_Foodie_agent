@@ -1306,7 +1306,18 @@
       delete state.comments[id];
       delete state.privateNotes[id];
       if (state.viewRestaurant && state.viewRestaurant.name === r.restaurant) state.panel = 'main';
-      if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.deleteReview(id); } catch (e) { console.warn(e); } } else saveToStorage();
+      if (window.FOODIE_API?.enabled) {
+        try {
+          await window.FOODIE_API.deleteReview(id);
+          await refreshFeed();
+        } catch (e) {
+          console.warn(e);
+          state.reviews = state.reviews.concat([r]);
+          render();
+          alert('Could not delete: ' + (e.message || 'Please try again.'));
+          return;
+        }
+      } else saveToStorage();
       render();
     }
 
