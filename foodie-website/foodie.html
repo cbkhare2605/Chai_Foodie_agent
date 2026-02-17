@@ -2461,6 +2461,7 @@
         const el = document.getElementById('networkSearchInput');
         if (el) { el.value = savedNetworkSearch; state.networkSearch = savedNetworkSearch; }
       }
+      if (state.tab === 'map') setTimeout(initMap, 100);
     }
 
     let map = null;
