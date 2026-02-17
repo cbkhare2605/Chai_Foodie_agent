@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#e31919">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,12 +13,10 @@
   <title>Foodie - Trusted Restaurant Reviews</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html { overflow-x: hidden; max-width: 100%; }
-    body { font-family: system-ui, -apple-system, sans-serif; background: #eee; min-height: 100vh; overflow-x: hidden; max-width: 100vw; }
-    #app { max-width: 100%; overflow-x: hidden; }
-    .top-bar { max-width: 100%; }
-    
-    .top-bar { position: fixed; top: 0; left: 0; right: 0; background: #e31919; color: white; z-index: 90; }
+    html { overflow-x: hidden; max-width: 100%; -webkit-text-size-adjust: 100%; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #eee; min-height: 100vh; overflow-x: hidden; max-width: 100vw; width: 100%; -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+    #app { max-width: 100%; overflow-x: hidden; width: 100%; }
+    .top-bar { position: fixed; top: 0; left: 0; right: 0; width: 100%; max-width: 100vw; background: #e31919; color: white; z-index: 90; }
     .header { padding: 12px 16px; display: flex; align-items: center; gap: 16px; }
     .menu-btn { background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 4px 8px; }
     .menu-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; }
@@ -48,7 +46,7 @@
     .tab:hover, .tab.active { color: white; }
     .tab.active { background: rgba(255,255,255,0.2); border-radius: 8px; }
     
-    .app-content { padding-top: 120px; min-height: 100vh; display: flex; justify-content: center; }
+    .app-content { padding-top: 120px; min-height: 100vh; display: flex; justify-content: center; width: 100%; max-width: 100%; }
     .app-content-inner { flex: 1; min-width: 0; max-width: 720px; width: 100%; }
     .app-content-inner.map-view, .app-content-inner.add-view { max-width: 720px; width: 100%; }
     .main { padding: 16px; width: 100%; box-sizing: border-box; }
@@ -150,7 +148,7 @@
     .filter-btn:nth-child(3) { background: #006CE0; }
     .filter-btn:nth-child(4) { background: #ff8d00; }
     .filter-active { box-shadow: inset 0 0 0 3px white; }
-    #map-container { height: 500px; min-height: 400px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; box-sizing: border-box; }
+    #map-container { height: 600px; min-height: 500px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; box-sizing: border-box; }
     #fix-location-map { height: 300px; min-height: 300px; width: 100%; border-radius: 12px; overflow: hidden; }
     .map-marker.leaflet-marker-icon { background: none !important; border: none !important; }
     .map-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem; color: #666; flex-wrap: wrap; }
@@ -172,13 +170,24 @@
       .list-dropdown-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 199; }
     }
     @media (max-width: 768px) {
-      .app-content { padding-left: 0; padding-right: 0; }
-      .app-content-inner { max-width: 100%; width: 100%; padding: 0 12px; box-sizing: border-box; }
+      .ptr-indicator { top: 100px; }
+      .app-content { padding-top: 100px; padding-left: 0; padding-right: 0; }
+      .app-content-inner { max-width: 100%; width: 100%; padding: 0 10px; box-sizing: border-box; min-width: 0; }
       .app-content-inner.map-view, .app-content-inner.add-view { max-width: 100%; }
-      .main { padding: 12px; max-width: 100%; }
-      .tabs { padding: 8px 4px; }
-      .tab { padding: 8px 6px; font-size: 0.75rem; min-width: 0; }
-      #map-container { height: 350px; min-height: 280px; }
+      .main { padding: 10px; max-width: 100%; }
+      .header { padding: 8px 12px; }
+      .header-logo { height: 28px; }
+      .tabs { padding: 6px 2px; }
+      .tab { padding: 6px 4px; font-size: 0.7rem; min-width: 0; }
+      #map-container { height: 420px; min-height: 360px; }
+      .feed-compose, .review-card { margin-bottom: 10px; }
+      .review-card-header { padding: 10px 12px; }
+      .review-avatar { width: 40px; height: 40px; font-size: 0.9rem; }
+      .review-card-body { padding: 0 12px 10px 56px; }
+      .review-actions { padding: 4px 12px 4px 56px; }
+      .review-actions-secondary { padding: 4px 12px 6px 56px; }
+      .add-review-rating { padding: 12px; }
+      .add-review-input, .add-review-textarea, .feed-search input, .map-search input { font-size: 16px; }
     }
     .hidden { display: none !important; }
     .skip-link { position: absolute; top: -40px; left: 0; background: #e31919; color: white; padding: 8px 16px; z-index: 200; }
@@ -201,9 +210,9 @@
     </div>
     <div id="cameraError" class="camera-error" style="display:none"></div>
   </div>
-  <script src="config.js?v=7"></script>
+  <script src="config.js?v=8"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="foodie-api.js?v=7"></script>
+  <script src="foodie-api.js?v=8"></script>
   <script>
     function formatDate(ts) {
       const sec = (Date.now() - ts) / 1000, m = sec/60, h = m/60, d = h/24;
@@ -2573,7 +2582,7 @@
     window.showRestaurantOnMap = showRestaurantOnMap;
     window.openFixLocationModal = openFixLocationModal;
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js?v=7').then(reg => {
+      navigator.serviceWorker.register('sw.js?v=8').then(reg => {
         setInterval(() => reg.update(), 30 * 60 * 1000);
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
       }).catch(() => {});

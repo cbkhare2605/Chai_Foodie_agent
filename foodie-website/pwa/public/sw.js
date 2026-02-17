@@ -1,4 +1,4 @@
-const CACHE = 'foodie-v15';
+const CACHE = 'foodie-v16';
 const PRECACHE = [
   './',
   './index.html',
