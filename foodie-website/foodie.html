@@ -598,11 +598,15 @@
       });
     }
 
-    function requestUserLocationIfNeeded() {
-      if (state.userLocation || !navigator.geolocation) return;
+    function requestUserLocationIfNeeded(onGotLocation) {
+      if (!navigator.geolocation) return;
+      if (state.userLocation) { if (onGotLocation) onGotLocation(state.userLocation); return; }
       navigator.geolocation.getCurrentPosition(
-        function(pos) { state.userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
-        function() {},
+        function(pos) {
+          state.userLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          if (onGotLocation) onGotLocation(state.userLocation);
+        },
+        function() { if (onGotLocation) onGotLocation(null); },
         { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
       );
     }
@@ -2645,7 +2649,7 @@
       Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
       render();
     }
-    function setTab(t) { state.tab = t; state.panel = t === 'network' ? 'network' : (t === 'groups' ? 'groups' : 'main'); if (t !== 'add') state.editingReview = null; render(); if (t === 'map') setTimeout(initMap, 200); if (t === 'add') { loadNsfwModel(); requestUserLocationIfNeeded(); } if (t === 'groups' && state.user && window.FOODIE_API?.enabled) refreshFeed(); }
+    function setTab(t) { state.tab = t; state.panel = t === 'network' ? 'network' : (t === 'groups' ? 'groups' : 'main'); if (t !== 'add') state.editingReview = null; render(); if (t === 'map') { requestUserLocationIfNeeded(function(loc){ if (loc && state.tab==='map' && map && !state.mapFocusRestaurant) map.setView([loc.lat,loc.lng],14); }); setTimeout(initMap, 200); } if (t === 'add') { requestUserLocationIfNeeded(); loadNsfwModel(); } if (t === 'groups' && state.user && window.FOODIE_API?.enabled) refreshFeed(); }
     function filterMap(f) { state.mapFilter = f; render(); setTimeout(function(){ if (state.tab === 'map') initMap(); }, 150); }
     function setRating(n) { state.rating = n; render(); }
 
@@ -2654,7 +2658,14 @@
       if (!el) return;
       if (typeof L === 'undefined') { setTimeout(initMap, 100); return; }
       if (!el.offsetHeight) el.style.minHeight = '400px';
-      try { if (map) map.remove(); } catch (e) {}
+      try {
+        if (map && !state.mapFocusRestaurant) {
+          const c = map.getCenter();
+          const z = map.getZoom();
+          state._mapView = { lat: c.lat, lng: c.lng, zoom: z };
+        }
+        if (map) map.remove();
+      } catch (e) {}
       map = null; markers = []; markerCluster = null; poiLayer = null; userLocationMarker = null;
       const restaurants = getMapRestaurants();
       const q = (state.mapSearch || '').toLowerCase().trim();
@@ -2746,7 +2757,15 @@
           markers.push(m);
         });
       }
-      if (toShow.length === 1) map.setView([toShow[0].lat, toShow[0].lng], 15);
+      if (state.mapFocusRestaurant) {
+        const f = state.mapFocusRestaurant;
+        map.setView([f.lat, f.lng], 15);
+      } else if (state._mapView) {
+        map.setView([state._mapView.lat, state._mapView.lng], state._mapView.zoom);
+        state._mapView = null;
+      } else if (state.userLocation) {
+        map.setView([state.userLocation.lat, state.userLocation.lng], 14);
+      } else if (toShow.length === 1) map.setView([toShow[0].lat, toShow[0].lng], 15);
       else if (toShow.length > 1) {
         const bounds = L.latLngBounds(toShow.map(r => [r.lat, r.lng]));
         map.fitBounds(bounds, { padding: [20, 20], maxZoom: 15, minZoom: 1 });
@@ -2764,7 +2783,6 @@
       } else userLocationMarker = null;
       if (state.mapFocusRestaurant) {
         const f = state.mapFocusRestaurant;
-        map.setView([f.lat, f.lng], 15);
         const tol = 0.0001;
         const m = markers.find(mk => Math.abs(mk.getLatLng().lat - f.lat) < tol && Math.abs(mk.getLatLng().lng - f.lng) < tol);
         if (m) setTimeout(function(){ m.openPopup(); }, 300);
