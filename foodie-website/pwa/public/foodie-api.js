@@ -397,6 +397,29 @@
     await supabase.from('connections').delete().eq('user_a', ua).eq('user_b', ub);
   }
 
+  async function connectFromInvite(inviterDisplayName) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const inviterId = await getUserIdByDisplayName(inviterDisplayName);
+    if (!inviterId || inviterId === user.id) return false;
+    const ua = user.id < inviterId ? user.id : inviterId;
+    const ub = user.id < inviterId ? inviterId : user.id;
+    const { data: existing } = await supabase.from('connections').select('user_a').eq('user_a', ua).eq('user_b', ub).single();
+    if (existing) return true;
+    const { error } = await supabase.from('connections').insert({ user_a: ua, user_b: ub });
+    if (error) return false;
+    const inviteeName = (await getProfileByUserId(user.id))?.display_name || 'Someone';
+    await supabase.from('notifications').insert({
+      id: 'n' + Date.now(),
+      user_id: inviterId,
+      type: 'connection',
+      text: inviteeName + ' joined from your invite and is now connected. Tap Network to remove if you didn\'t invite them.',
+      read: false,
+      created_at: Date.now()
+    });
+    return true;
+  }
+
   async function toggleSave(savedKey, add) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -471,6 +494,7 @@
     addComment,
     sendConnectionRequest,
     acceptConnectionRequest,
+    connectFromInvite,
     ignoreConnectionRequest,
     cancelConnectionRequest,
     removeConnection,
