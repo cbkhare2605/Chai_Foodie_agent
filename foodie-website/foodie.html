@@ -1740,8 +1740,9 @@
         (getEffectiveLevel(r) === 1 || getEffectiveLevel(r) === 2 || getEffectiveLevel(r) === 3)
       );
       if (!atLoc.length) return null;
+      const uniqueBy = [...new Set(atLoc.map(r => r.by))];
       const avg = atLoc.reduce((s, r) => s + (r.rating || 0), 0) / atLoc.length;
-      return { avgRating: avg.toFixed(1), count: atLoc.length };
+      return { avgRating: avg.toFixed(1), count: uniqueBy.length };
     }
 
     function getMapBubbleSize(avgRating, reviewCount) {
@@ -1766,6 +1767,10 @@
       if (state.feedCuisine) list = list.filter(r => (r.cuisine||'Various') === state.feedCuisine);
       if (state.feedPrice) list = list.filter(r => (r.price||2) <= parseInt(state.feedPrice));
       if (state.feedMinRating) list = list.filter(r => (r.rating||0) >= parseInt(state.feedMinRating));
+      list = list.filter(function(r, i) {
+        const dup = list.find(function(x, j) { return j < i && x.by === r.by && Math.abs(x.lat - r.lat) < 0.001 && Math.abs(x.lng - r.lng) < 0.001 && Math.abs((x.date||0) - (r.date||0)) < 120000; });
+        return !dup;
+      });
       return list;
     }
 
