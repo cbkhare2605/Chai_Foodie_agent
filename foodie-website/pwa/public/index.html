@@ -1623,6 +1623,7 @@
     }
 
     async function addReview() {
+      if (state._addReviewInProgress) return;
       const text = ((document.querySelector('.add-review-textarea') || {}).value || state.reviewText || '').trim();
       if (!text || state.rating < 1) { alert('Please add a rating and write your review.'); return; }
       if (text.length > MAX_REVIEW_TEXT) { alert('Review is too long. Please keep it under ' + MAX_REVIEW_TEXT + ' characters.'); return; }
@@ -1653,44 +1654,48 @@
         if (geocoded) place = { name: inputName, lat: geocoded.lat, lng: geocoded.lng };
       }
       if (!place && !inputName) { alert('Please enter a restaurant name.'); return; }
-      const restName = (place.name || state.restaurantSearch.trim() || '').slice(0, MAX_RESTAURANT_NAME);
-      state.reviews.unshift({
-        id: Date.now().toString(),
-        restaurant: restName,
-        lat: parseFloat(place.lat),
-        lng: parseFloat(place.lng),
-        by: state.user.displayName,
-        text: text.trim(),
-        rating: state.rating,
-        date: Date.now(),
-        level: 3,
-        likes: 0,
-        liked: false,
-        cuisine: state.addCuisine || 'Various',
-        price: state.addPrice || 2,
-        photos: (state.addPhotos || []).filter(isSafePhotoUrl),
-        verifiedVisit: state.addVerifiedVisit,
-        wouldGoAgain: state.addWouldGoAgain
-      });
-      state.rating = 0;
-      state.reviewText = '';
-      state.restaurantSearch = '';
-      state.selectedPlace = null;
-      state.searchResults = [];
-      state.editingReview = null;
-      state.addCuisine = ''; state.addPrice = 2; state.addPhotos = []; state.addVerifiedVisit = false; state.addWouldGoAgain = true;
-      const newReview = state.reviews[0];
-      if (window.FOODIE_API?.enabled) {
-        try {
+      state._addReviewInProgress = true;
+      try {
+        const restName = (place.name || state.restaurantSearch.trim() || '').slice(0, MAX_RESTAURANT_NAME);
+        const reviewId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + '-' + Math.random().toString(36).slice(2, 11));
+        state.reviews.unshift({
+          id: reviewId,
+          restaurant: restName,
+          lat: parseFloat(place.lat),
+          lng: parseFloat(place.lng),
+          by: state.user.displayName,
+          text: text.trim(),
+          rating: state.rating,
+          date: Date.now(),
+          level: 3,
+          likes: 0,
+          liked: false,
+          cuisine: state.addCuisine || 'Various',
+          price: state.addPrice || 2,
+          photos: (state.addPhotos || []).filter(isSafePhotoUrl),
+          verifiedVisit: state.addVerifiedVisit,
+          wouldGoAgain: state.addWouldGoAgain
+        });
+        state.rating = 0;
+        state.reviewText = '';
+        state.restaurantSearch = '';
+        state.selectedPlace = null;
+        state.searchResults = [];
+        state.editingReview = null;
+        state.addCuisine = ''; state.addPrice = 2; state.addPhotos = []; state.addVerifiedVisit = false; state.addWouldGoAgain = true;
+        const newReview = state.reviews[0];
+        if (window.FOODIE_API?.enabled) {
           await window.FOODIE_API.saveReview(newReview);
           await refreshFeed();
-        } catch (e) {
-          state.reviews.shift();
-          alert('Could not save review: ' + (e.message || 'Please check your connection and try again.'));
-          render(); return;
-        }
-      } else saveToStorage();
-      setTab('feed');
+        } else saveToStorage();
+        setTab('feed');
+      } catch (e) {
+        if (state.reviews.length > 0) state.reviews.shift();
+        alert('Could not save review: ' + (e.message || 'Please check your connection and try again.'));
+        render();
+      } finally {
+        state._addReviewInProgress = false;
+      }
     }
 
     function isValidCoord(v) { const n = parseFloat(v); return typeof n === 'number' && !isNaN(n) && n >= -90 && n <= 90; }
@@ -2353,7 +2358,7 @@
               ${(state.addPhotos||[]).map((p,i)=>isSafePhotoUrl(p)?`<span class="photo-preview"><img src="${p}" alt=""><button type="button" onclick="state.addPhotos.splice(${i},1); render()">×</button></span>`:'').filter(Boolean).join('')}
             </div>
             <textarea class="add-review-textarea" placeholder="Write your review..." maxlength="${MAX_REVIEW_TEXT}" oninput="state.reviewText=this.value">${(state.reviewText||'').replace(/</g,'&lt;')}</textarea>
-            <button class="add-review-submit" onclick="addReview()">${isEditing ? 'Update Review' : 'Post Review'}</button>
+            <button class="add-review-submit" onclick="addReview()" ${state._addReviewInProgress ? 'disabled' : ''}>${state._addReviewInProgress ? 'Posting...' : (isEditing ? 'Update Review' : 'Post Review')}</button>
             <button class="add-review-cancel" onclick="discardReview()">${isEditing ? 'Cancel' : 'Discard'}</button>
           </div>
         `;
