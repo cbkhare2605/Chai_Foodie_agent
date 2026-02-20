@@ -213,9 +213,9 @@
     </div>
     <div id="cameraError" class="camera-error" style="display:none"></div>
   </div>
-  <script src="config.js?v=8"></script>
+  <script src="config.js?v=9"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="foodie-api.js?v=8"></script>
+  <script src="foodie-api.js?v=9"></script>
   <script>
     function formatDate(ts) {
       const sec = (Date.now() - ts) / 1000, m = sec/60, h = m/60, d = h/24;
@@ -2903,7 +2903,7 @@
     window.showRestaurantOnMap = showRestaurantOnMap;
     window.openFixLocationModal = openFixLocationModal;
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js?v=8').then(reg => {
+      navigator.serviceWorker.register('sw.js?v=9').then(reg => {
         setInterval(() => reg.update(), 30 * 60 * 1000);
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
       }).catch(() => {});
