@@ -1049,7 +1049,7 @@
       if (!toName || !toName.trim()) return;
       const from = state.user.displayName;
       const to = toName.trim();
-      if (state.pendingConnect && state.pendingConnect.trim().toLowerCase() === to.toLowerCase()) { state.pendingConnect = null; try { sessionStorage.removeItem('foodie_pendingConnect'); } catch(e) {} }
+      if (state.pendingConnect && state.pendingConnect.trim().toLowerCase() === to.toLowerCase()) { state.pendingConnect = null; try { localStorage.removeItem('foodie_pendingConnect'); } catch(e) {} }
       if (from === to) return;
       const conns = state.connections[from] || [];
       if (conns.includes(to)) return;
@@ -2112,7 +2112,17 @@
           <p style="font-size:0.9rem;color:#666;margin-bottom:16px">Connect with people you know to see their restaurant reviews.</p>
           <h3 style="margin-bottom:8px;font-size:1rem;color:#333">Invite friends not on Foodie</h3>
           <p style="font-size:0.85rem;color:#666;margin-bottom:12px">Share a link via WhatsApp, Messages, or email. When they sign up, you&apos;re connected instantly. If someone forwards your link, you can remove them in Network.</p>
-          <button onclick="shareApp(true)" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 20px;margin-bottom:24px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:500">📤 Invite via link</button>
+          <button onclick="shareApp(true)" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 20px;margin-bottom:12px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1rem;font-weight:500">📤 Invite via link</button>
+          <details style="margin-bottom:24px;padding:12px;background:#f8f9fa;border-radius:8px;font-size:0.85rem">
+            <summary style="cursor:pointer;font-weight:500;color:#666">🧪 Test invite flow (remove when done)</summary>
+            <ol style="margin:12px 0 0 16px;padding:0;color:#555;line-height:1.6">
+              <li>Tap <strong>Invite via link</strong> above to copy your link</li>
+              <li>Open that link in an <strong>incognito/private window</strong> or another device</li>
+              <li>Sign up with a test email (e.g. test+invite1@gmail.com)</li>
+              <li>Check your email and click the confirmation link (can open in a different tab/browser — auto-connect still works)</li>
+              <li>You should be <strong>auto-connected</strong> — no manual connect needed</li>
+            </ol>
+          </details>
           ${suggestedSection}
           ${window.FOODIE_API?.enabled ? `<h3 style="margin-bottom:8px;font-size:1rem;color:#333">Search people on Foodie</h3>
           <p style="font-size:0.85rem;color:#666;margin-bottom:12px">Search by name (min 2 characters). Results update as you type.</p>
@@ -2604,7 +2614,8 @@
       if (password.length < 6) { if (errEl) errEl.textContent = 'Password must be at least 6 characters'; return; }
       if (errEl) errEl.textContent = '';
       try {
-        const signUpData = await api.signUp(email, password, name);
+        const connectParam = state.pendingConnect || (function(){ try { return localStorage.getItem('foodie_pendingConnect'); } catch(e){ return null; } })();
+        const signUpData = await api.signUp(email, password, name, connectParam || undefined);
         const stored = await api.loadData(signUpData?.session || signUpData?.user);
         if (!stored.user && signUpData?.user) {
           const prof = await api.getProfileByUserId(signUpData.user.id);
@@ -2854,14 +2865,14 @@
       const connectName = params.get('connect');
       if (connectName) {
         const name = decodeURIComponent(connectName).trim();
-        if (name) { state.pendingConnect = name; try { sessionStorage.setItem('foodie_pendingConnect', name); } catch(e) {} }
+        if (name) { state.pendingConnect = name; try { localStorage.setItem('foodie_pendingConnect', name); } catch(e) {} }
         const p = new URLSearchParams(location.search); p.delete('connect'); const q = p.toString() ? '?' + p.toString() : ''; if (history.replaceState) history.replaceState({}, '', location.pathname + q);
       }
-      if (!state.pendingConnect) { try { const stored = sessionStorage.getItem('foodie_pendingConnect'); if (stored) state.pendingConnect = stored; } catch(e) {} }
+      if (!state.pendingConnect) { try { const stored = localStorage.getItem('foodie_pendingConnect'); if (stored) state.pendingConnect = stored; } catch(e) {} }
       if (state.pendingConnect && state.user && state.pendingConnect !== state.user.displayName) {
         const toConnect = state.pendingConnect;
         state.pendingConnect = null;
-        try { sessionStorage.removeItem('foodie_pendingConnect'); } catch(e) {}
+        try { localStorage.removeItem('foodie_pendingConnect'); } catch(e) {}
         if (window.FOODIE_API?.enabled && window.FOODIE_API.connectFromInvite) {
           window.FOODIE_API.connectFromInvite(toConnect).then(function(ok) {
             if (ok) { showListToast('You\'re now connected with ' + toConnect + '!'); refreshFeed(); }

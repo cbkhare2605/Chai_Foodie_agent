@@ -225,11 +225,16 @@
     if (error) throw error;
   }
 
-  async function signUp(email, password, displayName) {
+  async function signUp(email, password, displayName, connectParam) {
+    const baseUrl = typeof location !== 'undefined' ? (location.origin + location.pathname).replace(/\/index\.html$/i, '/') : '';
+    const redirectTo = connectParam ? (baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'connect=' + encodeURIComponent(connectParam)) : baseUrl;
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { display_name: displayName } }
+      options: {
+        data: { display_name: displayName },
+        emailRedirectTo: redirectTo || undefined
+      }
     });
     if (error) throw error;
     if (data.user) {
