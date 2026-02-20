@@ -47,6 +47,9 @@
     .tab.active { background: rgba(255,255,255,0.2); border-radius: 8px; }
     
     .app-content { padding-top: 120px; min-height: 100vh; display: flex; justify-content: center; width: 100%; max-width: 100%; }
+    body.chrome-banner-visible .top-bar { top: 52px; }
+    body.chrome-banner-visible .app-content { padding-top: 172px; }
+    body.chrome-banner-visible .signup-page { padding-top: 52px; }
     .app-content-inner { flex: 1; min-width: 0; max-width: 720px; width: 100%; }
     .app-content-inner.map-view, .app-content-inner.add-view { max-width: 720px; width: 100%; }
     .main { padding: 16px; width: 100%; box-sizing: border-box; }
@@ -203,6 +206,12 @@
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
+  <div id="chromeBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:200;background:#1a73e8;color:white;padding:12px 16px;font-size:0.9rem;box-shadow:0 2px 8px rgba(0,0,0,0.2)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:720px;margin:0 auto">
+      <span>Open in Chrome for the best experience and to add to home screen</span>
+      <a id="chromeBannerBtn" href="#" style="flex-shrink:0;padding:10px 16px;background:white;color:#1a73e8;border-radius:8px;font-weight:600;text-decoration:none;font-size:0.9rem">Open in Chrome</a>
+    </div>
+  </div>
   <div id="app" role="application" aria-label="Foodie app" style="min-height:200px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;color:#666">Loading Foodie…</div>
   <noscript><div style="padding:24px;text-align:center">Please enable JavaScript to use Foodie.</div></noscript>
   <div id="cameraModal" class="camera-modal-overlay" aria-label="Camera capture" role="dialog">
@@ -463,6 +472,7 @@
       render();
       handleDeepLink();
       setupAutoRefresh();
+      setupChromeBanner();
       if (state.user && window.FOODIE_API?.enabled && (stored.groups || []).length === 0) {
         [1000, 2000, 4000].forEach(function(delay) {
           setTimeout(async function() {
@@ -527,6 +537,25 @@
         if (document.visibilityState === 'visible' && state.user && window.FOODIE_API?.enabled) refreshFeed();
       }, 60000);
       setupPullToRefresh();
+    }
+    function setupChromeBanner() {
+      const ua = navigator.userAgent || '';
+      const isAndroid = /Android/i.test(ua);
+      const isWebView = /; wv\)/.test(ua);
+      const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+      if (!isAndroid || isStandalone) return;
+      if (isWebView) {
+        const banner = document.getElementById('chromeBanner');
+        const btn = document.getElementById('chromeBannerBtn');
+        if (!banner || !btn) return;
+        const url = location.href;
+        const withoutProtocol = url.replace(/^https?:\/\//, '');
+        const intentUrl = 'intent://' + withoutProtocol + '#Intent;scheme=https;package=com.android.chrome;end';
+        btn.href = intentUrl;
+        btn.onclick = function(e) { e.preventDefault(); window.location.href = intentUrl; };
+        banner.style.display = 'block';
+        document.body.classList.add('chrome-banner-visible');
+      }
     }
     let ptrStartY = 0, ptrPullAmount = 0, ptrActive = false;
     function setupPullToRefresh() {
@@ -813,8 +842,8 @@
       const appUrl = baseUrl + (state.user?.displayName ? '?connect=' + encodeURIComponent(state.user.displayName) : '');
       const name = state.user?.displayName || 'A friend';
       const shareText = inviteMode
-        ? name + ' wants to connect with you on Foodie – restaurant reviews from people you trust. Open the link and sign up to get started.'
-        : 'Check out Foodie – restaurant reviews from people you trust. Add to your home screen for the best experience (iPhone: Share → Add to Home Screen; Android: menu ⋮ → Add to Home Screen).';
+        ? name + ' wants to connect with you on Foodie – restaurant reviews from people you trust. Open the link, sign up, then add to your home screen: iPhone: Share → Add to Home Screen; Android: open in Chrome, tap menu ⋮ → Install app or Add to Home screen.'
+        : 'Check out Foodie – restaurant reviews from people you trust. Add to your home screen for the best experience: iPhone: Share → Add to Home Screen; Android: open in Chrome, tap menu ⋮ → Install app or Add to Home screen.';
       const message = shareText + ' ' + appUrl;
       closeMenu();
       try {
@@ -2006,6 +2035,7 @@
                 <button class="signup-btn" onclick="handleSupabaseSignUp()" style="font-size:1.1rem">Sign up</button>
                 <button class="signup-btn" onclick="handleSupabaseSignIn()" style="font-size:1.1rem;background:rgba(255,255,255,0.15)">Log in</button>
                 <a href="#" onclick="state.authMode='forgot'; render(); return false" style="font-size:0.9rem;color:rgba(255,255,255,0.9);margin-top:12px;display:inline-block;text-decoration:underline">Forgot password?</a>
+                <p style="font-size:0.8rem;color:rgba(255,255,255,0.7);margin-top:16px;max-width:320px">📱 Add to home screen: iPhone → Share → Add to Home Screen. Android → Open in Chrome, then menu ⋮ → Install app</p>
               </div>
             </div>
           </div>
