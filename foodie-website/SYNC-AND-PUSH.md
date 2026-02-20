@@ -16,7 +16,7 @@ cd "/Users/chaitanyakhare/Cursor projects/Chai_Foodie_agent/foodie-website" && .
 
 ```bash
 cd "/Users/chaitanyakhare/Cursor projects/Chai_Foodie_agent"
-git add foodie-website/foodie.html foodie-website/foodie-api.js foodie-website/config.js foodie-website/pwa/public/
+git add foodie-website/foodie.html foodie-website/foodie-api.js foodie-website/config.js foodie-website/pwa/public/ foodie-website/VERSION.md
 git commit -m "Update Foodie app"
 git push
 ```
@@ -26,7 +26,7 @@ git push
 ## All-in-one (sync + push)
 
 ```bash
-cd "/Users/chaitanyakhare/Cursor projects/Chai_Foodie_agent/foodie-website" && ./setup.sh && cd .. && git add foodie-website/foodie.html foodie-website/foodie-api.js foodie-website/config.js foodie-website/pwa/public/ && git commit -m "Update Foodie app" && git push
+cd "/Users/chaitanyakhare/Cursor projects/Chai_Foodie_agent/foodie-website" && ./setup.sh && cd .. && git add foodie-website/foodie.html foodie-website/foodie-api.js foodie-website/config.js foodie-website/pwa/public/ foodie-website/VERSION.md && git commit -m "Update Foodie app" && git push
 ```
 
 ---
@@ -39,6 +39,7 @@ cd "/Users/chaitanyakhare/Cursor projects/Chai_Foodie_agent/foodie-website" && .
 | `foodie-website/foodie-api.js` | Yes |
 | `foodie-website/config.js` | Yes |
 | `foodie-website/pwa/public/` | Yes (deploy output) |
+| `foodie-website/VERSION.md` | Yes (version tracking) |
 
 ---
 
@@ -46,8 +47,9 @@ cd "/Users/chaitanyakhare/Cursor projects/Chai_Foodie_agent/foodie-website" && .
 
 When you fix bugs (e.g. search input) and need all users to load the new code:
 
-1. **Bump version** in `foodie.html`: change `?v=4` to `?v=5` on `config.js`, `foodie-api.js`, and `sw.js`.
-2. **Bump cache** in `pwa/public/sw.js`: change `CACHE = 'foodie-v4'` to `CACHE = 'foodie-v5'`.
+1. **Bump version** in `foodie.html`: change `?v=9` to `?v=10` on `config.js`, `foodie-api.js`, and `sw.js`.
+2. **Bump cache** in `pwa/public/sw.js`: change `CACHE = 'foodie-v9'` to `CACHE = 'foodie-v10'`.
+3. **Update** `foodie-website/VERSION.md` with the new version number.
 3. Run sync + push as above.
 
 The new SW will activate, clear old caches, and users will get fresh assets on next load or when they revisit.

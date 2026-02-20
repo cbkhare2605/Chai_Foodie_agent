@@ -1,12 +1,43 @@
 # Restore to a Previous Version
 
-You can restore to either the **stable baseline** (v1.0-working) or the **test version** (v1.1-test).
+You can restore to the **stable baseline** (v1.0-working), **test version** (v1.1-test), or **current working** (v1.2-working).
+
+---
+
+## v1.2-working (Current working — recommended)
+
+Latest stable: invite auto-connect, groups, network search, pull-to-refresh, etc.
+
+### Restore
+
+```bash
+cd "/Users/chaitanyakhare/Cursor projects/Chai_Foodie_agent"
+git checkout v1.2-working -- foodie-website/
+cd foodie-website && ./setup.sh
+```
+
+Then push to deploy:
+
+```bash
+cd ..
+git add foodie-website/
+git commit -m "Restore to v1.2-working (current)"
+git push
+```
+
+### What it includes
+
+- Everything in v1.1-test, plus:
+- Invite flow: auto-connect survives email confirmation (localStorage + emailRedirectTo)
+- Groups, network search, pull-to-refresh
+- Cancel pending connection requests
+- XSS and null-safety fixes
 
 ---
 
 ## v1.0-working (Stable baseline)
 
-Tried and tested. Use this if v1.1-test or later causes issues.
+Tried and tested. Use this if v1.2-working causes issues.
 
 ### Restore
 
@@ -35,7 +66,7 @@ git push
 
 ---
 
-## v1.1-test (Current test version)
+## v1.1-test (Test version)
 
 New features being tested. Restore to v1.0-working if anything breaks.
 
@@ -56,9 +87,24 @@ cd foodie-website && ./setup.sh
 
 ---
 
+## Create tag for current working (run once)
+
+To store the current state as v1.2-working:
+
+```bash
+cd "/Users/chaitanyakhare/Cursor projects/Chai_Foodie_agent"
+git add foodie-website/
+git commit -m "Tag v1.2-working: invite auto-connect, version tracking"  # if there are uncommitted changes
+git tag v1.2-working
+git push origin v1.2-working
+```
+
+---
+
 ## Push tags to remote (optional)
 
 ```bash
 git push origin v1.0-working
 git push origin v1.1-test
+git push origin v1.2-working
 ```
