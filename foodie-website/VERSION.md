@@ -32,7 +32,8 @@ When deploying a fix that users must get immediately:
 |-----|---------|
 | `v1.0-working` | Stable baseline |
 | `v1.1-test` | Test version (map, profile, etc.) |
-| `v1.2-working` | Current: invite auto-connect, network search, groups, etc. |
+| `v1.2-working` | Invite auto-connect, network search, groups, etc. |
+| `v1.0.1` | **Current working**: feed level links, deduplication fix, My Reviews count, Roma Italian fix |
 
 See `RESTORE-WORKING-VERSION.md` for restore commands.
 
