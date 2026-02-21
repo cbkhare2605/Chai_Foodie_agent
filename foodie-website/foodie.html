@@ -984,6 +984,12 @@
     function viewRestaurantFromReviewId(reviewId) {
       const r = state.reviews.find(x => x.id === reviewId);
       if (!r) return;
+      const la = parseFloat(r.lat), ln = parseFloat(r.lng);
+      if (isNaN(la) || isNaN(ln) || la < -90 || la > 90 || ln < -180 || ln > 180) {
+        showListToast('Location not set for this review. Tap Fix location to add it.');
+        openFixLocationModal(r.restaurant || '', 0, 0, r.id);
+        return;
+      }
       goToRestaurantOnMap(r.restaurant, r.lat, r.lng);
     }
     function goToRestaurantOnMap(name, lat, lng) {
@@ -1009,8 +1015,12 @@
       const vr = state.viewRestaurant;
       if (vr) goToRestaurantOnMap(vr.name, vr.lat, vr.lng);
     }
-    function openFixLocationModal(restaurantName, oldLat, oldLng) {
-      state.fixLocationModal = { restaurantName, oldLat, oldLng, pinLat: oldLat, pinLng: oldLng };
+    function openFixLocationModal(restaurantName, oldLat, oldLng, reviewId) {
+      const lat = typeof oldLat === 'number' && !isNaN(oldLat) ? oldLat : 0;
+      const lng = typeof oldLng === 'number' && !isNaN(oldLng) ? oldLng : 0;
+      const pinLat = (lat === 0 && lng === 0) ? 20 : lat;
+      const pinLng = (lat === 0 && lng === 0) ? 77 : lng;
+      state.fixLocationModal = { restaurantName, oldLat: lat, oldLng: lng, pinLat, pinLng, reviewId: reviewId || null };
       render();
       setTimeout(initFixLocationMap, 250);
     }
@@ -1043,8 +1053,12 @@
     async function confirmFixLocationPin() {
       const m = state.fixLocationModal;
       if (!m) return;
-      const { restaurantName, oldLat, oldLng, pinLat, pinLng } = m;
-      const toUpdate = state.reviews.filter(r => Math.abs(r.lat - oldLat) < 0.01 && Math.abs(r.lng - oldLng) < 0.01);
+      const { restaurantName, oldLat, oldLng, pinLat, pinLng, reviewId } = m;
+      let toUpdate = reviewId ? state.reviews.filter(r => r.id === reviewId) : state.reviews.filter(r => {
+        const rlat = parseFloat(r.lat), rlng = parseFloat(r.lng);
+        if (isNaN(rlat) || isNaN(rlng)) return (oldLat === 0 && oldLng === 0) && (r.restaurant || '').trim() === (restaurantName || '').trim();
+        return Math.abs(rlat - oldLat) < 0.01 && Math.abs(rlng - oldLng) < 0.01;
+      });
       for (const r of toUpdate) {
         r.lat = pinLat; r.lng = pinLng;
         if (window.FOODIE_API?.enabled) {
@@ -1063,8 +1077,8 @@
       render();
       if (state.tab === 'map') setTimeout(initMap, 50);
     }
-    async function fixLocationForRestaurant(restaurantName, oldLat, oldLng) {
-      openFixLocationModal(restaurantName, oldLat, oldLng);
+    async function fixLocationForRestaurant(restaurantName, oldLat, oldLng, reviewId) {
+      openFixLocationModal(restaurantName, oldLat, oldLng, reviewId);
     }
 
     async function connectFromSearch(displayName) {
@@ -1867,7 +1881,7 @@
             <button class="review-action-btn" onclick="document.getElementById('commentInput${r.id}')?.focus()" aria-label="Comment">💬 Comment ${comments.length?`(${comments.length})`:''}</button>
             <button class="review-action-btn" onclick="shareReview('${r.id}')" aria-label="Share">↗️ Share</button>
             <button class="review-action-btn" onclick="viewRestaurantFromReviewId('${r.id}')" aria-label="View on map">📍 Map</button>
-            ${isOwn ? `<button class="review-action-btn" onclick="fixLocationForRestaurant('${(r.restaurant||'').replace(/'/g,"\\'")}', ${r.lat}, ${r.lng})" style="font-size:0.85rem" title="Fix wrong location">🔧 Fix location</button>` : ''}
+            <button class="review-action-btn" onclick="fixLocationForRestaurant('${(r.restaurant||'').replace(/'/g,"\\'")}', ${(parseFloat(r.lat)||0)}, ${(parseFloat(r.lng)||0)}, '${(r.id||'').replace(/'/g,"\\'")}')" style="font-size:0.85rem" title="Fix wrong location">🔧 Fix location</button>
             <button class="review-action-btn" onclick="toggleSaveById('${r.id}')" aria-label="Save">${saved?'🔖':'📑'} ${saved?'Saved':'Save'}</button>
             ${isOwn ? `<button class="review-action-btn" onclick="editReviewById('${r.id}')">✏️ Edit</button><button class="review-action-btn" onclick="deleteReviewById('${r.id}')" style="color:#c62828" aria-label="Delete">🗑️ Delete</button>` : ''}
           </div>
@@ -2249,7 +2263,7 @@
             <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;align-items:center">
               <a href="https://www.google.com/maps?q=${vr.lat},${vr.lng}" target="_blank" rel="noopener" style="color:#0a66c2;font-size:0.9rem">📍 Get directions</a>
               <button onclick="goToMapFromViewRestaurant()" style="padding:6px 12px;background:#e31919;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">📍 View on map</button>
-              ${(looksWrong || hasOwnReview) ? `<button onclick="openFixLocationModal('${(vr.name||'').replace(/'/g,"\\'")}', ${vr.lat}, ${vr.lng})" style="padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">🔧 Fix location</button>` : ''}
+              <button onclick="openFixLocationModal('${(vr.name||'').replace(/'/g,"\\'")}', ${vr.lat}, ${vr.lng})" style="padding:6px 12px;background:#333;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem">🔧 Fix location</button>
             </div>
           </div>
           <h3 style="margin-bottom:12px">Reviews</h3>
