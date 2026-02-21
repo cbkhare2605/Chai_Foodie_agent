@@ -1848,6 +1848,7 @@
       state._feedLevelCounts = { l1: list.filter(r=>getEffectiveLevel(r)===1).length, l2: list.filter(r=>getEffectiveLevel(r)===2).length, l3: list.filter(r=>getEffectiveLevel(r)===3).length };
       if (state.feedLevelFilter === '1') list = list.filter(r => getEffectiveLevel(r) === 1);
       else if (state.feedLevelFilter === '2') list = list.filter(r => getEffectiveLevel(r) === 2);
+      else if (state.feedLevelFilter === '3') list = list.filter(r => getEffectiveLevel(r) === 3);
       return list;
     }
 
@@ -1965,9 +1966,13 @@
       const list = getFilteredReviews();
       const statsEl = document.getElementById('feedStats');
       if (statsEl) {
-        const l1 = list.filter(r => getEffectiveLevel(r) === 1).length;
-        const l2 = list.filter(r => getEffectiveLevel(r) === 2).length;
-        statsEl.textContent = list.length + ' reviews' + (l1 || l2 ? ' · 1st: ' + l1 + ' · 2nd: ' + l2 : '');
+        const c = state._feedLevelCounts || {};
+        const l1 = c.l1 || 0, l2 = c.l2 || 0, l3 = c.l3 || 0;
+        const total = list.length;
+        const lev = state.feedLevelFilter;
+        const tgl = function(n) { return "event.preventDefault();state.feedLevelFilter=state.feedLevelFilter==='"+n+"'?'':'"+n+"';updateFeedCards();render();return false"; };
+        const html = total + ' reviews' + (total ? ' · <a href="#" onclick="' + tgl('1') + '" style="color:' + (lev === '1' ? '#e31919' : '#006CE0') + ';text-decoration:underline;cursor:pointer">1st: ' + l1 + '</a> · <a href="#" onclick="' + tgl('2') + '" style="color:' + (lev === '2' ? '#e31919' : '#FF8D00') + ';text-decoration:underline;cursor:pointer">2nd: ' + l2 + '</a>' + (l3 ? ' · <a href="#" onclick="' + tgl('3') + '" style="color:' + (lev === '3' ? '#e31919' : '#333') + ';text-decoration:underline;cursor:pointer">Yours: ' + l3 + '</a>' : '') : '');
+        statsEl.innerHTML = html;
       }
       const el = document.getElementById('feedCards');
       if (!el) return;
@@ -2359,9 +2364,9 @@
         </div></div>`;
       } else if (state.tab === 'feed' || state.panel === 'myreviews') {
         mainContent = '<div class="main">' +
-          (state.panel === 'myreviews' ? `<div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>` : '') +
+          (state.panel === 'myreviews' ? `<div style="margin-bottom:12px;display:flex;align-items:center;gap:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button><span style="font-size:0.95rem;color:#666">${reviews.length} review${reviews.length===1?'':'s'}</span></div>` : '') +
           (state.panel === 'main' ? `<div class="feed-search" style="display:flex;gap:8px;align-items:center"><input type="text" id="feedSearchInput" placeholder="Search reviews, restaurants, or people..." value="${(state.feedSearch||'').replace(/"/g,'&quot;')}" oninput="state.feedSearch=this.value; updateFeedCards()" style="flex:1">${window.FOODIE_API?.enabled ? `<button onclick="refreshFeed()" title="Refresh from server" style="padding:10px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1.1rem">↻</button>` : ''}</div>
-            <div id="feedStats" style="font-size:0.9rem;color:#666;margin-bottom:12px">${(()=>{const list=getFilteredReviews();const c=state._feedLevelCounts||{};const l1=c.l1||0;const l2=c.l2||0;const l3=c.l3||0;const total=list.length;const lev=state.feedLevelFilter;return total+' reviews'+(total?' · <a href="#" onclick="event.preventDefault();state.feedLevelFilter=lev===\'1\'?\'\':\'1\';updateFeedCards();render();return false" style="color:'+(lev==='1'?'#e31919':'#006CE0')+';text-decoration:underline;cursor:pointer">1st: '+l1+'</a> · <a href="#" onclick="event.preventDefault();state.feedLevelFilter=lev===\'2\'?\'\':\'2\';updateFeedCards();render();return false" style="color:'+(lev==='2'?'#e31919':'#FF8D00')+';text-decoration:underline;cursor:pointer">2nd: '+l2+'</a>'+(l3?' · Yours: '+l3:'')+'':'');})()}</div>
+            <div id="feedStats" style="font-size:0.9rem;color:#666;margin-bottom:12px">${(()=>{const list=getFilteredReviews();const c=state._feedLevelCounts||{};const l1=c.l1||0;const l2=c.l2||0;const l3=c.l3||0;const total=list.length;const lev=state.feedLevelFilter;return total+' reviews'+(total?' · <a href="#" onclick="event.preventDefault();state.feedLevelFilter=lev===\'1\'?\'\':\'1\';updateFeedCards();render();return false" style="color:'+(lev==='1'?'#e31919':'#006CE0')+';text-decoration:underline;cursor:pointer">1st: '+l1+'</a> · <a href="#" onclick="event.preventDefault();state.feedLevelFilter=lev===\'2\'?\'\':\'2\';updateFeedCards();render();return false" style="color:'+(lev==='2'?'#e31919':'#FF8D00')+';text-decoration:underline;cursor:pointer">2nd: '+l2+'</a>'+(l3?' · <a href="#" onclick="event.preventDefault();state.feedLevelFilter=lev===\'3\'?\'\':\'3\';updateFeedCards();render();return false" style="color:'+(lev==='3'?'#e31919':'#333')+';text-decoration:underline;cursor:pointer">Yours: '+l3+'</a>':'')+'':'');})()}</div>
             ${window.FOODIE_API?.enabled ? `<button onclick="setTab('groups')" style="margin-bottom:12px;padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:500">👥 Groups ${(state.groups||[]).length ? '('+(state.groups||[]).length+')' : ''}</button>` : ''}
             <div class="feed-filters">
               <select onchange="state.feedCuisine=this.value; updateFeedCards()" style="padding:8px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem">
@@ -2504,7 +2509,7 @@
           <nav class="menu-sidebar-nav">
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='main'; state.tab='feed'; render()">Feed</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='editprofile'; render()">Edit Profile</button>
-            <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='myreviews'; render()">My Reviews</button>
+            <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='myreviews'; state.feedLevelFilter=''; render()">My Reviews</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='saved'; render()">Saved (${state.saved.length})</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='network'; render()">Network ${getPendingRequestsForMe().length ? `(${getPendingRequestsForMe().length})` : ''}</button>
             ${window.FOODIE_API?.enabled ? `<button class="menu-sidebar-item" onclick="closeMenu(); state.panel='groups'; state.groupsPanel='list'; state.selectedGroupId=null; if(state.user)refreshFeed(); render()">Groups (${(state.groups||[]).length})</button>` : ''}
