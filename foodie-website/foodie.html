@@ -1832,9 +1832,12 @@
       if (state.feedCuisine) list = list.filter(r => (r.cuisine||'Various') === state.feedCuisine);
       if (state.feedPrice) list = list.filter(r => (r.price||2) <= parseInt(state.feedPrice));
       if (state.feedMinRating) list = list.filter(r => (r.rating||0) >= parseInt(state.feedMinRating));
+      const seenIds = new Set();
       list = list.filter(function(r, i) {
+        if (r.id && seenIds.has(r.id)) return false;
         const dup = list.find(function(x, j) {
           if (j >= i) return false;
+          if (r.id && x.id && r.id === x.id) return true;
           const sameUser = (r.userId && x.userId && r.userId === x.userId) || (x.by || '').trim().toLowerCase() === (r.by || '').trim().toLowerCase();
           const sameLoc = Math.abs(parseFloat(x.lat) - parseFloat(r.lat)) < 0.001 && Math.abs(parseFloat(x.lng) - parseFloat(r.lng)) < 0.001;
           const ra = (r.restaurant || '').trim().toLowerCase();
@@ -1843,6 +1846,7 @@
           const nearTime = Math.abs((x.date||0) - (r.date||0)) < 86400000;
           return sameUser && (sameLoc || sameRestaurant) && nearTime;
         });
+        if (r.id) seenIds.add(r.id);
         return !dup;
       });
       state._feedLevelCounts = { l1: list.filter(r=>getEffectiveLevel(r)===1).length, l2: list.filter(r=>getEffectiveLevel(r)===2).length, l3: list.filter(r=>getEffectiveLevel(r)===3).length };
