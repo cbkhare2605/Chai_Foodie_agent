@@ -386,6 +386,7 @@
       mapFilter: 'all',
       feedCuisine: '',
       feedPrice: '',
+      feedLevelFilter: '',
       feedMinRating: 0,
       viewRestaurant: null,
       commentInput: {},
@@ -981,16 +982,29 @@
     function viewRestaurantDetail(restaurant, lat, lng) {
       goToRestaurantOnMap(restaurant, lat, lng);
     }
-    function viewRestaurantFromReviewId(reviewId) {
+    async function viewRestaurantFromReviewId(reviewId) {
       const r = state.reviews.find(x => x.id === reviewId);
       if (!r) return;
-      const la = parseFloat(r.lat), ln = parseFloat(r.lng);
-      if (isNaN(la) || isNaN(ln) || la < -90 || la > 90 || ln < -180 || ln > 180) {
+      let la = parseFloat(r.lat), ln = parseFloat(r.lng);
+      const invalid = isNaN(la) || isNaN(ln) || la < -90 || la > 90 || ln < -180 || ln > 180;
+      const looksDefault = (la === 0 && ln === 0) || (Math.abs(la - 37.37) < 0.1 && Math.abs(ln - (-122.03)) < 0.1);
+      const outsideIndia = la < 8 || la > 35 || ln < 68 || ln > 97;
+      const name = (r.restaurant || '').trim();
+      const suggestsIndia = name.length > 3 && /india|thane|mumbai|delhi|bangalore|chennai|pune|hyderabad|kolkata/i.test(name);
+      if (invalid && suggestsIndia && name.length > 5) {
+        const geocoded = await geocodePlace(name, 20, 77);
+        if (geocoded) { la = geocoded.lat; ln = geocoded.lng; goToRestaurantOnMap(r.restaurant, la, ln); return; }
+      }
+      if (invalid) {
         showListToast('Location not set for this review. Tap Fix location to add it.');
         openFixLocationModal(r.restaurant || '', 0, 0, r.id);
         return;
       }
-      goToRestaurantOnMap(r.restaurant, r.lat, r.lng);
+      if (suggestsIndia && name.length > 5 && (looksDefault || outsideIndia)) {
+        const geocoded = await geocodePlace(name, 20, 77);
+        if (geocoded) { la = geocoded.lat; ln = geocoded.lng; }
+      }
+      goToRestaurantOnMap(r.restaurant, la, ln);
     }
     function goToRestaurantOnMap(name, lat, lng) {
       const la = parseFloat(lat), ln = parseFloat(lng);
@@ -1015,11 +1029,19 @@
       const vr = state.viewRestaurant;
       if (vr) goToRestaurantOnMap(vr.name, vr.lat, vr.lng);
     }
-    function openFixLocationModal(restaurantName, oldLat, oldLng, reviewId) {
-      const lat = typeof oldLat === 'number' && !isNaN(oldLat) ? oldLat : 0;
-      const lng = typeof oldLng === 'number' && !isNaN(oldLng) ? oldLng : 0;
-      const pinLat = (lat === 0 && lng === 0) ? 20 : lat;
-      const pinLng = (lat === 0 && lng === 0) ? 77 : lng;
+    async function openFixLocationModal(restaurantName, oldLat, oldLng, reviewId) {
+      let lat = typeof oldLat === 'number' && !isNaN(oldLat) ? oldLat : 0;
+      let lng = typeof oldLng === 'number' && !isNaN(oldLng) ? oldLng : 0;
+      let pinLat = (lat === 0 && lng === 0) ? 20 : lat;
+      let pinLng = (lat === 0 && lng === 0) ? 77 : lng;
+      const name = (restaurantName || '').trim();
+      const suggestsIndia = name.length > 3 && /india|thane|mumbai|delhi|bangalore|chennai|pune|hyderabad|kolkata/i.test(name);
+      const looksDefault = (lat === 0 && lng === 0) || (Math.abs(lat - 37.37) < 0.1 && Math.abs(lng - (-122.03)) < 0.1);
+      const outsideIndia = lat < 8 || lat > 35 || lng < 68 || lng > 97;
+      if (suggestsIndia && name.length > 5 && (looksDefault || outsideIndia)) {
+        const geocoded = await geocodePlace(name, 20, 77);
+        if (geocoded) { pinLat = geocoded.lat; pinLng = geocoded.lng; }
+      }
       state.fixLocationModal = { restaurantName, oldLat: lat, oldLng: lng, pinLat, pinLng, reviewId: reviewId || null };
       render();
       setTimeout(initFixLocationMap, 250);
@@ -1823,6 +1845,9 @@
         });
         return !dup;
       });
+      state._feedLevelCounts = { l1: list.filter(r=>getEffectiveLevel(r)===1).length, l2: list.filter(r=>getEffectiveLevel(r)===2).length, l3: list.filter(r=>getEffectiveLevel(r)===3).length };
+      if (state.feedLevelFilter === '1') list = list.filter(r => getEffectiveLevel(r) === 1);
+      else if (state.feedLevelFilter === '2') list = list.filter(r => getEffectiveLevel(r) === 2);
       return list;
     }
 
@@ -2336,7 +2361,7 @@
         mainContent = '<div class="main">' +
           (state.panel === 'myreviews' ? `<div style="margin-bottom:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button></div>` : '') +
           (state.panel === 'main' ? `<div class="feed-search" style="display:flex;gap:8px;align-items:center"><input type="text" id="feedSearchInput" placeholder="Search reviews, restaurants, or people..." value="${(state.feedSearch||'').replace(/"/g,'&quot;')}" oninput="state.feedSearch=this.value; updateFeedCards()" style="flex:1">${window.FOODIE_API?.enabled ? `<button onclick="refreshFeed()" title="Refresh from server" style="padding:10px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer;font-size:1.1rem">↻</button>` : ''}</div>
-            <div id="feedStats" style="font-size:0.9rem;color:#666;margin-bottom:12px">${(()=>{const list=getFilteredReviews();const l1=list.filter(r=>getEffectiveLevel(r)===1).length;const l2=list.filter(r=>getEffectiveLevel(r)===2).length;return list.length+' reviews'+(list.length?' · 1st: '+l1+' · 2nd: '+l2:'');})()}</div>
+            <div id="feedStats" style="font-size:0.9rem;color:#666;margin-bottom:12px">${(()=>{const list=getFilteredReviews();const c=state._feedLevelCounts||{};const l1=c.l1||0;const l2=c.l2||0;const l3=c.l3||0;const total=list.length;const lev=state.feedLevelFilter;return total+' reviews'+(total?' · <a href="#" onclick="event.preventDefault();state.feedLevelFilter=lev===\'1\'?\'\':\'1\';updateFeedCards();render();return false" style="color:'+(lev==='1'?'#e31919':'#006CE0')+';text-decoration:underline;cursor:pointer">1st: '+l1+'</a> · <a href="#" onclick="event.preventDefault();state.feedLevelFilter=lev===\'2\'?\'\':\'2\';updateFeedCards();render();return false" style="color:'+(lev==='2'?'#e31919':'#FF8D00')+';text-decoration:underline;cursor:pointer">2nd: '+l2+'</a>'+(l3?' · Yours: '+l3:'')+'':'');})()}</div>
             ${window.FOODIE_API?.enabled ? `<button onclick="setTab('groups')" style="margin-bottom:12px;padding:8px 16px;background:#0a66c2;color:white;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:500">👥 Groups ${(state.groups||[]).length ? '('+(state.groups||[]).length+')' : ''}</button>` : ''}
             <div class="feed-filters">
               <select onchange="state.feedCuisine=this.value; updateFeedCards()" style="padding:8px;border-radius:8px;border:1px solid #ddd;font-size:0.9rem">
@@ -2753,11 +2778,28 @@
     function filterMap(f) { state.mapFilter = f; render(); setTimeout(function(){ if (state.tab === 'map') initMap(); }, 150); }
     function setRating(n) { state.rating = n; render(); }
 
-    function initMap() {
+    async function initMap() {
       const el = document.getElementById('map-container');
       if (!el) return;
       if (typeof L === 'undefined') { setTimeout(initMap, 100); return; }
       if (!el.offsetHeight) el.style.minHeight = '400px';
+      state._geocodedReviewIds = state._geocodedReviewIds || new Set();
+      const invalidIndia = state.reviews.filter(r => {
+        const la = parseFloat(r.lat), ln = parseFloat(r.lng);
+        const invalid = isNaN(la) || isNaN(ln) || la < -90 || la > 90 || ln < -180 || ln > 180;
+        const looksDefault = (la === 0 && ln === 0) || (Math.abs(la - 37.37) < 0.1 && Math.abs(ln - (-122.03)) < 0.1);
+        const outsideIndia = la < 8 || la > 35 || ln < 68 || ln > 97;
+        const name = (r.restaurant || '').trim();
+        const suggestsIndia = name.length > 3 && /india|thane|mumbai|delhi|bangalore|chennai|pune|hyderabad|kolkata/i.test(name);
+        return suggestsIndia && name.length > 5 && !state._geocodedReviewIds.has(r.id) && (invalid || looksDefault || outsideIndia);
+      });
+      let geocodedAny = false;
+      for (const r of invalidIndia.slice(0, 3)) {
+        const geocoded = await geocodePlace(r.restaurant || '', 20, 77);
+        if (geocoded) { r.lat = geocoded.lat; r.lng = geocoded.lng; geocodedAny = true; if (window.FOODIE_API?.enabled) { try { await window.FOODIE_API.fixReviewLocation(r.id, geocoded.lat, geocoded.lng); } catch(e) {} } else saveToStorage(); }
+        state._geocodedReviewIds.add(r.id);
+      }
+      if (geocodedAny) { if (!window.FOODIE_API?.enabled) saveToStorage(); render(); return; }
       try {
         if (map && !state.mapFocusRestaurant) {
           const c = map.getCenter();
