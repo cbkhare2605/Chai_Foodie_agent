@@ -76,6 +76,7 @@
         restaurant: r.restaurant,
         lat: r.lat,
         lng: r.lng,
+        userId: r.user_id,
         by: profileById[r.user_id]?.display_name || 'Unknown',
         text: r.text,
         rating: r.rating,

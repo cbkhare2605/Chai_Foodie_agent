@@ -1346,7 +1346,7 @@
     function getEffectiveLevel(r) {
       if (!r || !state.user) return 2;
       if (r.seed) return 0;
-      if (r.by === state.user.displayName) return 3;
+      if (r.userId === state.user.id || (r.by || '').trim().toLowerCase() === (state.user.displayName || '').trim().toLowerCase()) return 3;
       const myConns = state.connections[state.user.displayName] || [];
       if (myConns.includes(r.by)) return 1;
       if (myConns.some(c => (state.connections[c] || []).includes(r.by))) return 2;
@@ -1799,7 +1799,7 @@
 
     function getFilteredReviews() {
       let list = state.reviews;
-      if (state.panel === 'myreviews') list = list.filter(r => r.by === state.user?.displayName);
+      if (state.panel === 'myreviews') list = list.filter(r => r.userId === state.user?.id || (r.by || '').trim().toLowerCase() === (state.user?.displayName || '').trim().toLowerCase());
       const q = (state.feedSearch || '').toLowerCase().trim();
       if (q) list = list.filter(r =>
         (r.restaurant||'').toLowerCase().includes(q) ||
@@ -1811,7 +1811,14 @@
       if (state.feedPrice) list = list.filter(r => (r.price||2) <= parseInt(state.feedPrice));
       if (state.feedMinRating) list = list.filter(r => (r.rating||0) >= parseInt(state.feedMinRating));
       list = list.filter(function(r, i) {
-        const dup = list.find(function(x, j) { return j < i && x.by === r.by && Math.abs(x.lat - r.lat) < 0.001 && Math.abs(x.lng - r.lng) < 0.001 && Math.abs((x.date||0) - (r.date||0)) < 120000; });
+        const dup = list.find(function(x, j) {
+          if (j >= i) return false;
+          const sameUser = (r.userId && x.userId && r.userId === x.userId) || (x.by || '').trim().toLowerCase() === (r.by || '').trim().toLowerCase();
+          const sameLoc = Math.abs(parseFloat(x.lat) - parseFloat(r.lat)) < 0.001 && Math.abs(parseFloat(x.lng) - parseFloat(r.lng)) < 0.001;
+          const sameRestaurant = (x.restaurant || '').trim().toLowerCase() === (r.restaurant || '').trim().toLowerCase();
+          const nearTime = Math.abs((x.date||0) - (r.date||0)) < 600000;
+          return sameUser && (sameLoc || sameRestaurant) && nearTime;
+        });
         return !dup;
       });
       return list;
@@ -1844,7 +1851,7 @@
 
     function renderReviewCard(r) {
       const effLevel = getEffectiveLevel(r);
-      const isOwn = (effLevel === 3) || (state.user && r.by === state.user.displayName);
+      const isOwn = (effLevel === 3) || (state.user && (r.userId === state.user.id || (r.by || '').trim().toLowerCase() === (state.user.displayName || '').trim().toLowerCase()));
       const comments = getComments(r.id);
       const saved = isSaved(r);
       const mutualCount = getMutualConnectionsCount(r);
@@ -2094,7 +2101,7 @@
       if (state.panel === 'editprofile') {
         const uid = state.user?.displayName || '';
         const prof = state.profiles[uid] || {};
-        const myReviews = state.reviews.filter(r => r.by === uid).length;
+        const myReviews = state.reviews.filter(r => r.userId === state.user?.id || (r.by || '').trim().toLowerCase() === (uid || '').trim().toLowerCase()).length;
         mainContent = `<div class="main"><div style="padding:16px;background:white;border-radius:8px;max-width:400px;margin:0 auto">
           <h2 style="margin-bottom:16px">Edit Profile</h2>
           <div style="text-align:center;margin-bottom:16px">
