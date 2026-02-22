@@ -896,17 +896,20 @@
     }
 
     function getSavedKey(r) { return (r.lat + ',' + r.lng + '|' + (r.restaurant||'')).slice(0,80); }
+    function isSameRestaurant(r, x) {
+      const ra = (r.restaurant || '').trim().toLowerCase();
+      const xa = (x.restaurant || '').trim().toLowerCase();
+      const sameName = ra === xa || (ra.length > 3 && xa.length > 3 && (ra.includes(xa) || xa.includes(ra)));
+      const sameLoc = Math.abs(parseFloat(x.lat) - parseFloat(r.lat)) < 0.01 && Math.abs(parseFloat(x.lng) - parseFloat(r.lng)) < 0.01;
+      return sameName && sameLoc;
+    }
     function getAlsoReviewedBy(r) {
       if (!r) return [];
-      return [...new Set(state.reviews.filter(x =>
-        Math.abs(x.lat - r.lat) < 0.01 && Math.abs(x.lng - r.lng) < 0.01 && x.by !== r.by
-      ).map(x => x.by))];
+      return [...new Set(state.reviews.filter(x => x.by !== r.by && isSameRestaurant(r, x)).map(x => x.by))];
     }
     function getReviewsAtLocation(r) {
       if (!r) return [];
-      return state.reviews.filter(x =>
-        Math.abs(x.lat - r.lat) < 0.01 && Math.abs(x.lng - r.lng) < 0.01
-      );
+      return state.reviews.filter(x => isSameRestaurant(r, x));
     }
     function isSaved(r) { return state.saved.includes(getSavedKey(r)); }
     function getPrivateNote(reviewId) { return (state.privateNotes || {})[reviewId] || ''; }
@@ -928,7 +931,7 @@
       else {
         state.saved.push(k);
         const myConns = state.connections[state.user?.displayName] || [];
-        const connReviews = state.reviews.filter(x => myConns.includes(x.by) && Math.abs(x.lat - r.lat) < 0.01 && Math.abs(x.lng - r.lng) < 0.01 && x.by !== r.by);
+        const connReviews = state.reviews.filter(x => myConns.includes(x.by) && x.by !== r.by && isSameRestaurant(r, x));
         if (connReviews.length > 0) {
           const names = [...new Set(connReviews.map(x => x.by))].slice(0, 2).join(' and ');
           state.notifications.push({ id: Date.now().toString(), type: 'connection_reviewed_saved', text: `${names} reviewed ${r.restaurant} — you saved this place!`, read: false, date: Date.now() });
@@ -1373,7 +1376,7 @@
     function getMutualConnectionsCount(r) {
       if (!state.user || !r) return 0;
       const myConns = state.connections[state.user.displayName] || [];
-      const samePlace = state.reviews.filter(x => Math.abs(x.lat - r.lat) < 0.01 && Math.abs(x.lng - r.lng) < 0.01 && x.by !== r.by);
+      const samePlace = state.reviews.filter(x => x.by !== r.by && isSameRestaurant(r, x));
       return samePlace.filter(x => myConns.includes(x.by)).length;
     }
     function getTrustScore(name) {
@@ -1382,10 +1385,10 @@
       if (cached !== undefined) return cached;
       const myReviews = state.reviews.filter(r => r.by === state.user.displayName);
       const theirReviews = state.reviews.filter(r => r.by === name);
-      const overlap = myReviews.filter(m => theirReviews.some(t => Math.abs(m.lat - t.lat) < 0.01 && Math.abs(m.lng - t.lng) < 0.01));
+      const overlap = myReviews.filter(m => theirReviews.some(t => isSameRestaurant(m, t)));
       if (overlap.length === 0) return 75;
       const match = overlap.filter(p => {
-        const theirs = theirReviews.find(t => Math.abs(p.lat - t.lat) < 0.01 && Math.abs(p.lng - t.lng) < 0.01);
+        const theirs = theirReviews.find(t => isSameRestaurant(p, t));
         return theirs && Math.abs((p.rating||0) - (theirs.rating||0)) <= 1;
       }).length;
       return Math.round(50 + (match / Math.max(1, overlap.length)) * 50);
@@ -1824,9 +1827,10 @@
       }));
     }
 
-    function getRestaurantNetworkScore(lat, lng) {
+    function getRestaurantNetworkScore(refReview) {
+      if (!refReview) return null;
       const atLoc = state.reviews.filter(r =>
-        Math.abs(r.lat - lat) < 0.01 && Math.abs(r.lng - lng) < 0.01 &&
+        isSameRestaurant(refReview, r) &&
         (getEffectiveLevel(r) === 1 || getEffectiveLevel(r) === 2 || getEffectiveLevel(r) === 3)
       );
       if (!atLoc.length) return null;
@@ -1887,7 +1891,7 @@
         const myName = state.user ? state.user.displayName : null;
         const connNames = myName ? (state.connections[myName] || []) : [];
         const names = state.reviews.filter(function(x) {
-          return Math.abs(x.lat - r.lat) < 0.01 && Math.abs(x.lng - r.lng) < 0.01 && x.by !== r.by && connNames.includes(x.by);
+          return x.by !== r.by && isSameRestaurant(r, x) && connNames.includes(x.by);
         }).map(function(x) { return x.by; }).join(', ');
         return '<div class="mutual-connections" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="showReviewersModal(\'' + r.id + '\')" title="' + escapeHtml(names) + '">' + mutualCount + ' ' + (mutualCount === 1 ? 'friend' : 'friends') + ' also reviewed this</div>';
       }
@@ -1910,7 +1914,7 @@
       const saved = isSaved(r);
       const mutualCount = getMutualConnectionsCount(r);
       const trustScore = !isOwn && (effLevel === 1 || effLevel === 2) ? getTrustScore(r.by) : null;
-      const networkScore = getRestaurantNetworkScore(r.lat, r.lng);
+      const networkScore = getRestaurantNetworkScore(r);
       const privateNote = isOwn ? getPrivateNote(r.id) : '';
       return `
         <div class="review-card" data-review-id="${r.id}">
@@ -2313,8 +2317,9 @@
       } else if (state.panel === 'restaurant' && state.viewRestaurant) {
         const vr = state.viewRestaurant;
         const vrLat = parseFloat(vr.lat), vrLng = parseFloat(vr.lng);
-        const restReviews = state.reviews.filter(r => Math.abs(parseFloat(r.lat) - vrLat) < 0.001 && Math.abs(parseFloat(r.lng) - vrLng) < 0.001);
-        const networkScore = getRestaurantNetworkScore(vr.lat, vr.lng);
+        const vrRef = { restaurant: vr.name, lat: vr.lat, lng: vr.lng };
+        const restReviews = state.reviews.filter(r => isSameRestaurant(vrRef, r));
+        const networkScore = getRestaurantNetworkScore(vrRef);
         const cuisines = [...new Set(restReviews.map(r=>r.cuisine||'Various'))];
         const looksWrong = Math.abs(vr.lat - 37.37) < 0.1 && Math.abs(vr.lng - (-122.03)) < 0.1;
         const hasOwnReview = restReviews.some(r => r.by === state.user?.displayName);
