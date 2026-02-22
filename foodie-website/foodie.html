@@ -2389,6 +2389,14 @@
           <button onclick="alert('Thanks! Feedback submitted.'); state.panel='main'; render()" style="padding:12px 24px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">Submit</button>
           <button onclick="state.panel='main'; render()" style="padding:12px 24px;background:#666;color:white;border:none;border-radius:8px;cursor:pointer;margin-left:8px">Cancel</button>
         </div></div>`;
+      } else if (state.panel === 'disclaimer') {
+        mainContent = `<div class="main"><div style="padding:16px;background:white;border-radius:8px;max-width:480px;margin:0 auto">
+          <h2 style="margin-bottom:16px">Disclaimer</h2>
+          <p style="font-size:0.95rem;color:#333;line-height:1.6;margin-bottom:12px">Foodie is a platform for sharing restaurant reviews among people you know. All reviews, comments, and other content are written by users and reflect their own opinions and experiences.</p>
+          <p style="font-size:0.95rem;color:#333;line-height:1.6;margin-bottom:12px">We are not responsible for any content posted by users. If you find something that you did not appreciate or that you believe is inappropriate, that content is the sole responsibility of the person who posted it, not of Foodie or its operators.</p>
+          <p style="font-size:0.9rem;color:#666;line-height:1.5">This disclaimer is provided for general information. For formal terms of service, please consult legal counsel.</p>
+          <button onclick="state.panel='main'; render()" style="margin-top:16px;padding:12px 24px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">Back</button>
+        </div></div>`;
       } else if (state.tab === 'feed' || state.panel === 'myreviews') {
         mainContent = '<div class="main">' +
           (state.panel === 'myreviews' ? `<div style="margin-bottom:12px;display:flex;align-items:center;gap:12px"><button onclick="state.panel='main'; state.tab='feed'; render()" style="padding:8px 16px;background:#e31919;color:white;border:none;border-radius:8px;cursor:pointer">← Back</button><span style="font-size:0.95rem;color:#666">${reviews.length} review${reviews.length===1?'':'s'}</span></div>` : '') +
@@ -2543,6 +2551,7 @@
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='notifications'; render()">Notifications ${state.notifications.filter(n=>(!n.recipient||n.recipient===state.user?.displayName)&&!n.read).length ? `(${state.notifications.filter(n=>(!n.recipient||n.recipient===state.user?.displayName)&&!n.read).length})` : ''}</button>
             <button class="menu-sidebar-item" onclick="shareApp()">📤 Share app</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='feedback'; render()">Feedback</button>
+            <button class="menu-sidebar-item" onclick="closeMenu(); state.panel='disclaimer'; render()">Disclaimer</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); logout()">Logout</button>
             <button class="menu-sidebar-item" onclick="closeMenu(); clearAllData()">Clear all data</button>
           </nav>
