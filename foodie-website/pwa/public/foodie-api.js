@@ -482,6 +482,46 @@
     if (error) throw error;
   }
 
+  let _connectionRequestChannel = null;
+  function subscribeToConnectionRequests(userId, onNewRequest) {
+    if (_connectionRequestChannel) {
+      try { supabase.removeChannel(_connectionRequestChannel); } catch (e) {}
+      _connectionRequestChannel = null;
+    }
+    if (!userId || !onNewRequest) return;
+    _connectionRequestChannel = supabase
+      .channel('connection-requests-' + userId)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'connection_requests',
+          filter: 'to_user=eq.' + userId
+        },
+        async (payload) => {
+          const fromUserId = payload?.new?.from_user;
+          if (!fromUserId) return;
+          const profile = await getProfileByUserId(fromUserId);
+          const name = profile?.display_name || 'Someone';
+          onNewRequest(name);
+        }
+      )
+      .subscribe();
+    return function unsubscribe() {
+      if (_connectionRequestChannel) {
+        try { supabase.removeChannel(_connectionRequestChannel); } catch (e) {}
+        _connectionRequestChannel = null;
+      }
+    };
+  }
+  function unsubscribeFromConnectionRequests() {
+    if (_connectionRequestChannel) {
+      try { supabase.removeChannel(_connectionRequestChannel); } catch (e) {}
+      _connectionRequestChannel = null;
+    }
+  }
+
   window.FOODIE_API = {
     enabled: true,
     supabase,
@@ -516,6 +556,8 @@
     addGroupMemberByName,
     removeGroupMember,
     leaveGroup,
-    deleteGroup
+    deleteGroup,
+    subscribeToConnectionRequests,
+    unsubscribeFromConnectionRequests
   };
 })();
