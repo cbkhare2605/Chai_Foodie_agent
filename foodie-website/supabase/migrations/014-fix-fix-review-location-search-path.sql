@@ -1,6 +1,5 @@
--- Fix review location: allows any authenticated user to update lat/lng of any review.
--- Run this in Supabase SQL Editor. Needed because RLS only allows updating own reviews,
--- but we want anyone to be able to correct wrong locations (e.g. Palo Alto default).
+-- Fix: Function Search Path Mutable (fix_review_location)
+-- Sets explicit search_path to prevent search path injection
 
 create or replace function public.fix_review_location(p_review_id text, p_lat float, p_lng float)
 returns void

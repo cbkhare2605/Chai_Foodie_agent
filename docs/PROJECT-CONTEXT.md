@@ -8,6 +8,39 @@
 
 ## Recent work (last few days)
 
+### 2025-02-12 — Supabase linter and performance fixes (migrations 012–020)
+
+- **What:** Full pass to resolve Supabase Security Advisor and Performance Advisor issues. Migrations 012–020 cover:
+  - **012:** Unindexed FKs, missing RLS (connections DELETE), notifications insert tightened
+  - **013:** `handle_new_user` — set `search_path = ''` (function search path mutable)
+  - **014:** `fix_review_location` — set `search_path = ''`
+  - **015:** profiles — `(select auth.uid())` for RLS initplan
+  - **016:** All tables — wrap `auth.uid()`/`auth.role()` in `(select ...)` for RLS initplan
+  - **017:** connection_requests — merge two UPDATE policies into one
+  - **018:** group_members — merge two SELECT policies into one
+  - **019:** groups — merge two SELECT policies into one
+  - **020:** review_likes — merge SELECT policies, split INSERT/UPDATE/DELETE
+- **Where:** `foodie-website/supabase/migrations/012-*.sql` through `020-*.sql`, `rls.sql`, `groups-rls.sql`, `schema.sql`, `fix-review-location.sql`.
+- **Decisions / notes:** Run migrations 012–020 in Supabase SQL Editor (in order). Leaked password protection requires Pro plan. **Push code** after changes so migrations are versioned and available for deploy/recovery.
+
+### 2025-02-12 — Future features backlog documented
+
+- **What:** `docs/FUTURE-FEATURES.md` — backlog of features to implement. First entry: **Favorites** (with travel use case) — curated top picks distinct from Saved; location filter by country/city; useful when visiting different countries.
+- **Where:** `docs/FUTURE-FEATURES.md`, `docs/README.md`.
+- **Decisions / notes:** User requested keeping Favorites as a future feature list. Add new ideas to FUTURE-FEATURES.md when planning work.
+
+### 2025-02-12 — Production transition plan documented
+
+- **What:** `docs/PRODUCTION-TRANSITION-PLAN.md` — plan for moving to full production without affecting current users. Principles: no breaking auth/URLs/data; additive migrations; URL redirects if domain changes; scale Supabase/Vercel when needed.
+- **Where:** `docs/PRODUCTION-TRANSITION-PLAN.md`, `docs/README.md`.
+- **Decisions / notes:** User requested documentation for future production transition. Plan emphasizes seamless transition and backward compatibility.
+
+### 2025-02-12 — Invite flow: auto-connect survives email confirmation
+
+- **What:** Invitees who sign up via your link now auto-connect even when the email confirmation link opens in a different tab or browser. Previously, `pendingConnect` was lost because it lived in sessionStorage when the user left to confirm email. Now: (1) `pendingConnect` stored in localStorage; (2) Supabase `emailRedirectTo` includes `?connect=InviterName` so the redirect URL carries the inviter — no reliance on storage across contexts.
+- **Where:** `foodie-website/foodie-api.js` (signUp with emailRedirectTo), `foodie-website/foodie.html` (handleSupabaseSignUp passes connectParam, handleDeepLink uses localStorage).
+- **Decisions / notes:** Test invite flow in Network tab (collapsible "Test invite flow"). If auto-connect fails, ensure Supabase Dashboard → Authentication → URL Configuration → Redirect URLs includes your app URL (with or without query params, depending on Supabase version).
+
 ### 2025-02-12 — New user discovery and onboarding
 
 - **What:** New users can now discover others on Foodie without knowing usernames. (1) **People on Foodie** — Network tab shows users who have written reviews; connect with one tap. (2) **Empty-state onboarding** — When feed and connections are empty, a "Get started" card explains how to connect (People on Foodie, Invite friends, Search by name) and links to Network.
