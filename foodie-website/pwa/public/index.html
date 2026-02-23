@@ -630,6 +630,7 @@
 
     let searchTimer = null;
     const COUNTRY_TO_ISO = { 'india': 'in', 'usa': 'us', 'united states': 'us', 'us': 'us', 'uk': 'gb', 'united kingdom': 'gb', 'germany': 'de', 'france': 'fr', 'australia': 'au', 'canada': 'ca', 'japan': 'jp', 'china': 'cn', 'brazil': 'br', 'mexico': 'mx', 'spain': 'es', 'italy': 'it', 'netherlands': 'nl', 'russia': 'ru', 'uae': 'ae', 'united arab emirates': 'ae', 'singapore': 'sg', 'malaysia': 'my', 'thailand': 'th', 'indonesia': 'id', 'philippines': 'ph', 'vietnam': 'vn', 'south korea': 'kr', 'korea': 'kr', 'pakistan': 'pk', 'bangladesh': 'bd', 'sri lanka': 'lk', 'nepal': 'np' };
+    const COUNTRY_TO_NAME = { 'us': 'United States', 'usa': 'United States', 'gb': 'United Kingdom', 'uk': 'United Kingdom', 'ae': 'United Arab Emirates', 'uae': 'United Arab Emirates', 'kr': 'South Korea', 'vn': 'Vietnam', 'id': 'Indonesia', 'ph': 'Philippines', 'my': 'Malaysia', 'th': 'Thailand', 'pk': 'Pakistan', 'bd': 'Bangladesh', 'lk': 'Sri Lanka', 'np': 'Nepal' };
     const COUNTRY_BBOX = { 'in': [8, 68, 37, 97], 'us': [24, -125, 50, -66], 'gb': [49, -8, 61, 2], 'de': [47, 5, 55, 16], 'fr': [41, -5, 51, 10], 'au': [-44, 113, -10, 154], 'ca': [41, -141, 84, -52], 'jp': [24, 123, 46, 154], 'cn': [18, 73, 54, 135], 'br': [-34, -74, 5, -34], 'mx': [14, -118, 33, -86], 'es': [36, -9, 44, 5], 'it': [36, 6, 47, 19], 'ae': [22, 51, 27, 57], 'sg': [1.1, 103.6, 1.5, 104.1], 'my': [1, 99, 7, 120], 'th': [5, 97, 21, 106], 'id': [-11, 95, 6, 141], 'ph': [4, 116, 21, 127], 'vn': [8, 102, 24, 110], 'kr': [33, 125, 43, 132], 'pk': [24, 61, 37, 78], 'bd': [20, 88, 27, 93], 'lk': [6, 79, 10, 82], 'np': [26, 80, 31, 88] };
     function getCountryCodeFromQuery(query) {
       const parts = (query || '').split(',').map(p => p.trim().toLowerCase()).filter(Boolean);
@@ -642,6 +643,12 @@
       if (viewbox) url += '&viewbox=' + viewbox + '&bounded=1';
       if (countrycodes) url += '&countrycodes=' + encodeURIComponent(countrycodes);
       const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'FoodieApp/1.0 (https://github.com/foodie-app; contact@foodie.app)' } });
+      return res.json();
+    }
+    async function nominatimStructuredSearch(city, country, countrycodes) {
+      const params = new URLSearchParams({ city, country, format: 'json', limit: '5' });
+      if (countrycodes) params.set('countrycodes', countrycodes);
+      const res = await fetch('https://nominatim.openstreetmap.org/search?' + params, { headers: { 'Accept': 'application/json', 'User-Agent': 'FoodieApp/1.0 (https://github.com/foodie-app; contact@foodie.app)' } });
       return res.json();
     }
     async function photonSearch(query, lat, lon, bbox, countrycodes) {
@@ -733,11 +740,22 @@
 
     async function geocodePlaceOne(query, biasLat, biasLon, bbox, countrycodes) {
       let loc = (biasLat != null && biasLon != null) ? { lat: biasLat, lng: biasLon } : (state.userLocation || null);
+      const parts = (query || '').split(',').map(p => p.trim()).filter(Boolean);
+      if (parts.length === 2 && countrycodes && parts[1].length >= 2) {
+        const city = parts[0];
+        const country = COUNTRY_TO_NAME[countrycodes] || parts[1];
+        const struct = await nominatimStructuredSearch(city, country, countrycodes);
+        const cityResult = (struct || []).find(r => (r.addresstype || '').includes('city') || (r.addresstype || '').includes('town') || (r.addresstype || '').includes('municipality')) || struct[0];
+        if (cityResult) return { lat: parseFloat(cityResult.lat), lng: parseFloat(cityResult.lon) };
+      }
       const results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null, bbox, countrycodes);
       if (results.length > 0) return { lat: results[0].lat, lng: results[0].lng };
       const viewbox = bbox ? bbox.minLon + ',' + bbox.minLat + ',' + bbox.maxLon + ',' + bbox.maxLat : null;
       const data = await nominatimSearch(query, viewbox, countrycodes);
-      if (data?.length) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      if (data?.length) {
+        const cityResult = data.find(r => (r.addresstype || '').includes('city') || (r.addresstype || '').includes('town') || (r.addresstype || '').includes('municipality')) || data[0];
+        return { lat: parseFloat(cityResult.lat), lng: parseFloat(cityResult.lon) };
+      }
       return null;
     }
     async function reverseGeocode(lat, lng) {
