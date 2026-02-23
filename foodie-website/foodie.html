@@ -29,6 +29,8 @@
     .menu-sidebar-item:hover { background: rgba(255,255,255,0.1); }
     .logo { font-size: 1.4rem; font-weight: 600; }
     .header-logo { height: 32px; width: auto; object-fit: contain; }
+    .header-brand { display: flex; flex-direction: column; gap: 0; }
+    .header-tagline { font-size: 0.7rem; font-weight: 500; color: rgba(255,255,255,0.9); letter-spacing: 0.02em; margin-top: -2px; }
     
     .signup-page { min-height: 100vh; display: flex; flex-direction: column; }
     .signup-top { width: 100%; min-height: 40vh; background-color: #9e1212; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; }
@@ -183,6 +185,7 @@
       .main { padding: 10px; max-width: 100%; }
       .header { padding: 8px 12px; }
       .header-logo { height: 28px; }
+      .header-tagline { font-size: 0.65rem; }
       .tabs { padding: 6px 2px; }
       .tab { padding: 6px 4px; font-size: 0.7rem; min-width: 0; }
       #map-container { height: 420px; min-height: 360px; }
@@ -2641,7 +2644,10 @@
         <div class="top-bar">
           <div class="header">
             <button class="menu-btn" onclick="openMenu()">☰</button>
-            <img src="logo/Foodie_white.svg" alt="Foodie" class="header-logo">
+            <div class="header-brand">
+              <img src="logo/Foodie_white.svg" alt="Foodie" class="header-logo">
+              <span class="header-tagline">Trusted Reviews</span>
+            </div>
           </div>
           <nav class="tabs">
             <button class="tab ${state.tab==='feed'?'active':''}" onclick="setTab('feed')">📋 Feed</button>
