@@ -629,16 +629,26 @@
     }
 
     let searchTimer = null;
-    async function nominatimSearch(query, viewbox) {
+    const COUNTRY_TO_ISO = { 'india': 'in', 'usa': 'us', 'united states': 'us', 'us': 'us', 'uk': 'gb', 'united kingdom': 'gb', 'germany': 'de', 'france': 'fr', 'australia': 'au', 'canada': 'ca', 'japan': 'jp', 'china': 'cn', 'brazil': 'br', 'mexico': 'mx', 'spain': 'es', 'italy': 'it', 'netherlands': 'nl', 'russia': 'ru', 'uae': 'ae', 'united arab emirates': 'ae', 'singapore': 'sg', 'malaysia': 'my', 'thailand': 'th', 'indonesia': 'id', 'philippines': 'ph', 'vietnam': 'vn', 'south korea': 'kr', 'korea': 'kr', 'pakistan': 'pk', 'bangladesh': 'bd', 'sri lanka': 'lk', 'nepal': 'np' };
+    const COUNTRY_BBOX = { 'in': [8, 68, 37, 97], 'us': [24, -125, 50, -66], 'gb': [49, -8, 61, 2], 'de': [47, 5, 55, 16], 'fr': [41, -5, 51, 10], 'au': [-44, 113, -10, 154], 'ca': [41, -141, 84, -52], 'jp': [24, 123, 46, 154], 'cn': [18, 73, 54, 135], 'br': [-34, -74, 5, -34], 'mx': [14, -118, 33, -86], 'es': [36, -9, 44, 5], 'it': [36, 6, 47, 19], 'ae': [22, 51, 27, 57], 'sg': [1.1, 103.6, 1.5, 104.1], 'my': [1, 99, 7, 120], 'th': [5, 97, 21, 106], 'id': [-11, 95, 6, 141], 'ph': [4, 116, 21, 127], 'vn': [8, 102, 24, 110], 'kr': [33, 125, 43, 132], 'pk': [24, 61, 37, 78], 'bd': [20, 88, 27, 93], 'lk': [6, 79, 10, 82], 'np': [26, 80, 31, 88] };
+    function getCountryCodeFromQuery(query) {
+      const parts = (query || '').split(',').map(p => p.trim().toLowerCase()).filter(Boolean);
+      if (parts.length < 2) return null;
+      const last = parts[parts.length - 1];
+      return COUNTRY_TO_ISO[last] || null;
+    }
+    async function nominatimSearch(query, viewbox, countrycodes) {
       let url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=10';
       if (viewbox) url += '&viewbox=' + viewbox + '&bounded=1';
+      if (countrycodes) url += '&countrycodes=' + encodeURIComponent(countrycodes);
       const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'FoodieApp/1.0 (https://github.com/foodie-app; contact@foodie.app)' } });
       return res.json();
     }
-    async function photonSearch(query, lat, lon, bbox) {
+    async function photonSearch(query, lat, lon, bbox, countrycodes) {
       let url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(query) + '&limit=10';
-      if (lat != null && lon != null) url += '&lat=' + lat + '&lon=' + lon;
       if (bbox && bbox.minLon != null && bbox.minLat != null && bbox.maxLon != null && bbox.maxLat != null) url += '&bbox=' + bbox.minLon + ',' + bbox.minLat + ',' + bbox.maxLon + ',' + bbox.maxLat;
+      else if (countrycodes && COUNTRY_BBOX[countrycodes]) { const b = COUNTRY_BBOX[countrycodes]; url += '&bbox=' + b[1] + ',' + b[0] + ',' + b[3] + ',' + b[2]; }
+      else if (lat != null && lon != null) url += '&lat=' + lat + '&lon=' + lon;
       const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
       const data = await res.json();
       if (!data?.features?.length) return [];
@@ -681,18 +691,19 @@
       clearTimeout(searchTimer);
       searchTimer = setTimeout(async () => {
         const loc = state.userLocation || { lat: 37.37, lng: -122.03 };
+        const countrycodes = getCountryCodeFromQuery(q);
         try {
-          let results = await photonSearch(q, loc.lat, loc.lng);
-          if (!results.length) results = await photonSearch(q + ' restaurant', loc.lat, loc.lng);
+          let results = await photonSearch(q, loc.lat, loc.lng, null, countrycodes);
+          if (!results.length) results = await photonSearch(q + ' restaurant', loc.lat, loc.lng, null, countrycodes);
           if (!results.length) {
-            const data = await nominatimSearch(q);
+            const data = await nominatimSearch(q, null, countrycodes);
             if (data?.length) results = data.map(p => ({ name: p.display_name, lat: parseFloat(p.lat), lng: parseFloat(p.lon) }));
           }
           if (!results.length) {
             const parts = q.split(',').map(p => p.trim()).filter(Boolean);
             const cityPart = parts.length >= 2 ? parts.slice(-2).join(', ') : (parts.length ? parts[0] : '');
             if (cityPart.length >= 3) {
-              const cityResults = await photonSearch(cityPart, loc.lat, loc.lng);
+              const cityResults = await photonSearch(cityPart, loc.lat, loc.lng, null, countrycodes);
               if (cityResults.length) {
                 results = [{ name: q, lat: cityResults[0].lat, lng: cityResults[0].lng }];
                 state.searchResultsFromCity = true;
@@ -700,9 +711,9 @@
             }
             if (!results.length) {
               const alt = q.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
-              if (alt !== q) results = await photonSearch(alt, loc.lat, loc.lng);
+              if (alt !== q) results = await photonSearch(alt, loc.lat, loc.lng, null, countrycodes);
               if (!results.length && alt !== q) {
-                const data = await nominatimSearch(alt);
+                const data = await nominatimSearch(alt, null, countrycodes);
                 if (data?.length) results = data.map(p => ({ name: p.display_name, lat: parseFloat(p.lat), lng: parseFloat(p.lon) }));
               }
             }
@@ -720,12 +731,12 @@
       }, 400);
     }
 
-    async function geocodePlaceOne(query, biasLat, biasLon, bbox) {
+    async function geocodePlaceOne(query, biasLat, biasLon, bbox, countrycodes) {
       let loc = (biasLat != null && biasLon != null) ? { lat: biasLat, lng: biasLon } : (state.userLocation || null);
-      const results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null, bbox);
+      const results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null, bbox, countrycodes);
       if (results.length > 0) return { lat: results[0].lat, lng: results[0].lng };
       const viewbox = bbox ? bbox.minLon + ',' + bbox.minLat + ',' + bbox.maxLon + ',' + bbox.maxLat : null;
-      const data = await nominatimSearch(query, viewbox);
+      const data = await nominatimSearch(query, viewbox, countrycodes);
       if (data?.length) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
       return null;
     }
@@ -740,12 +751,13 @@
 
     async function geocodePlace(query, biasLat, biasLon) {
       try {
+        const countrycodes = getCountryCodeFromQuery(query);
         let loc = (biasLat != null && biasLon != null) ? { lat: biasLat, lng: biasLon } : (state.userLocation || null);
         let bbox = null;
         const parts = (query || '').split(',').map(p => p.trim()).filter(Boolean);
         const cityState = parts.length >= 2 ? parts.slice(-2).join(', ') : '';
         if (cityState.length >= 4) {
-          const region = await photonSearch(cityState, null, null);
+          const region = await photonSearch(cityState, null, null, null, countrycodes);
           if (region.length > 0) {
             const cityCenter = { lat: region[0].lat, lng: region[0].lng };
             const delta = 0.08;
@@ -756,22 +768,22 @@
           const delta = 0.06;
           bbox = { minLon: loc.lng - delta, minLat: loc.lat - delta, maxLon: loc.lng + delta, maxLat: loc.lat + delta };
         }
-        let r = await geocodePlaceOne(query, loc?.lat, loc?.lng, bbox);
+        let r = await geocodePlaceOne(query, loc?.lat, loc?.lng, bbox, countrycodes);
         if (r) return r;
         if (bbox && !cityState && loc) return { lat: loc.lat, lng: loc.lng };
         if (bbox && parts.length > 2) {
           const simplified = parts[0] + ', ' + cityState;
-          if (simplified !== query) r = await geocodePlaceOne(simplified, loc?.lat, loc?.lng, bbox);
+          if (simplified !== query) r = await geocodePlaceOne(simplified, loc?.lat, loc?.lng, bbox, countrycodes);
           if (r) return r;
         }
         if (bbox && cityState) {
-          const results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null, null);
+          const results = await photonSearch(query, loc?.lat ?? null, loc?.lng ?? null, null, countrycodes);
           if (results.length > 0 && loc) {
             const inRange = results.find(x => Math.abs(x.lat - loc.lat) < 0.15 && Math.abs(x.lng - loc.lng) < 0.15);
             if (inRange) return { lat: inRange.lat, lng: inRange.lng };
           }
         }
-        r = await geocodePlaceOne(query, loc?.lat, loc?.lng, null);
+        r = await geocodePlaceOne(query, loc?.lat, loc?.lng, null, countrycodes);
         if (r) return r;
         if (loc) return { lat: loc.lat, lng: loc.lng };
       } catch (e) {}
